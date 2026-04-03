@@ -29,39 +29,29 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Firebase Setup
+## Supabase Setup
 
-This app uses Cloud Firestore for tickets and Cloud Storage for image uploads.
+This app uses Supabase for ticket data, image uploads, and admin authentication.
 
-1. Create a Firebase project in the Firebase Console.
-2. Add a Web app and copy the config values into a local `.env.local` file.
-3. Enable Cloud Firestore and Cloud Storage in the console.
-4. Enable Email/Password authentication for the admin dashboard.
-5. Create a Firebase Auth user for the admin login.
-6. Deploy the repo rules with the Firebase CLI:
+1. Create a Supabase project.
+2. In `Project Settings > API`, copy the project URL and anon key into `.env.local`.
+3. In the SQL editor, run [`supabase/setup.sql`](/x:/Hyeon-sin/hyeoksin-web/supabase/setup.sql).
+4. In `Authentication > Sign In / Providers`, enable Email login.
+5. Create your admin user in `Authentication > Users`.
 
-```bash
-firebase login
-firebase deploy --only firestore:rules,storage
-```
-
-The repo includes `firestore.rules`, `storage.rules`, and `.env.example` as a starting point.
+The SQL file creates:
+- the `tickets` table
+- a public `tickets` storage bucket
+- row level security policies for public submissions and authenticated admin access
 
 ## Netlify Deploy
 
 If you deploy this repo to Netlify, set these environment variables in the Netlify site settings:
 
 ```bash
-NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
-NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
-
-Netlify will use [`netlify.toml`](/x:/Hyeon-sin/hyeoksin-web/netlify.toml) to run `npm run build`.
 
 ## Deploy on Vercel
 

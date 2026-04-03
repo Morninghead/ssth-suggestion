@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Swal from 'sweetalert2';
-import { db, collection, addDoc, uploadImages, Timestamp } from '../lib/firebase';
+import { createTicket, isSupabaseConfigured, uploadImages } from '../lib/supabase';
 
 type SuggestionFormData = {
   fullName: string;
@@ -71,6 +71,11 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured) {
+      Swal.fire({ icon: 'error', title: 'Supabase ยังไม่ถูกตั้งค่า', text: 'กรุณาเพิ่ม NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ก่อนใช้งาน' });
+      return;
+    }
+
     if (!formData.suggestionType) {
       Swal.fire({ icon: 'warning', title: 'แจ้งเตือน', text: 'กรุณาเลือกประเภทข้อเสนอแนะ' });
       return;
@@ -93,16 +98,11 @@ export default function Home() {
       const beforeUrls = beforeImages.length > 0 ? await uploadImages(beforeImages, ticketId, 'before') : [];
       const afterUrls = afterImages.length > 0 ? await uploadImages(afterImages, ticketId, 'after') : [];
 
-      // 3. Save to Firestore
-      await addDoc(collection(db, 'tickets'), {
+      await createTicket({
         ticketId,
         ...formData,
         beforeImages: beforeUrls,
         afterImages: afterUrls,
-        status: 'Pending',
-        managerFeedback: '',
-        afterDetail: '',
-        createdAt: Timestamp.now(),
       });
       
       Swal.fire({ icon: 'success', title: 'ส่งผลงานสำเร็จ!', text: `บันทึกหมายเลข ${ticketId} สำเร็จ` });
@@ -122,6 +122,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 text-slate-800">
+      {!isSupabaseConfigured && (
+        <div className="mx-auto max-w-2xl px-4 pt-4">
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            ยังไม่ได้ตั้งค่า Supabase ในโปรเจกต์นี้ กรุณาเพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_ANON_KEY` ก่อนส่งข้อมูลจริง
+          </div>
+        </div>
+      )}
+
       <div className="bg-gradient-to-r from-teal-700 to-blue-600 text-white pt-10 pb-8 px-6 rounded-b-[2rem] shadow-lg max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold mb-2">ระบบนวัตกรรม (Hyeok-sin)</h1>
         <p className="text-sm opacity-90 leading-relaxed">

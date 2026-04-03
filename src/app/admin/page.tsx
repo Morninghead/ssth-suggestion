@@ -2,34 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { db, collection, getDocs, updateDoc, doc, query, orderBy, uploadImages } from '../../lib/firebase';
-import { auth } from '../../lib/firebase';
-
-type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Rejected';
-
-type TicketRecord = {
-  dbId: string;
-  ticketId: string;
-  fullName: string;
-  department: string;
-  productionLine?: string;
-  otherDepartment?: string;
-  suggestionType: string;
-  detail: string;
-  cause: string;
-  problem: string;
-  solution: string;
-  beforeImages?: string[];
-  afterImages?: string[];
-  status: TicketStatus;
-  managerFeedback?: string;
-  afterDetail?: string;
-};
+import type { User } from '@supabase/supabase-js';
+import {
+  fetchTickets,
+  getCurrentAdminUser,
+  isSupabaseConfigured,
+  signInAdmin,
+  signOutAdmin,
+  subscribeToAdminAuthState,
+  TicketRecord,
+  TicketStatus,
+  updateTicket,
+  uploadImages,
+} from '../../lib/supabase';
 
 export default function AdminDashboard() {
   const [authUser, setAuthUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
@@ -42,25 +31,38 @@ export default function AdminDashboard() {
   const [updateAfterDetail, setUpdateAfterDetail] = useState('');
   const [newAfterImages, setNewAfterImages] = useState<File[]>([]);
 
-  async function fetchTickets() {
-    try {
-      const q = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map((snapshot) => ({
-        dbId: snapshot.id,
-        ...(snapshot.data() as Omit<TicketRecord, 'dbId'>),
-      }));
-      setTickets(data);
-    } catch (e: unknown) {
-      console.error(e);
-      // Fallback or handle error
-    }
-  }
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function restoreSession() {
+      try {
+        const user = await getCurrentAdminUser();
+        if (!cancelled) {
+          setAuthUser(user);
+          setAuthLoading(false);
+          if (user) {
+            const data = await fetchTickets();
+            if (!cancelled) {
+              setTickets(data);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setAuthLoading(false);
+        }
+      }
+    }
+
+    void restoreSession();
+
+    const { data: subscription } = subscribeToAdminAuthState(async (user) => {
       setAuthUser(user);
-      setAuthLoading(false);
 
       if (!user) {
         setTickets([]);
@@ -68,17 +70,28 @@ export default function AdminDashboard() {
         return;
       }
 
-      void fetchTickets();
+      try {
+        const data = await fetchTickets();
+        if (!cancelled) {
+          setTickets(data);
+        }
+      } catch (error) {
+        console.error(error);
+      }
     });
 
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      await fetchTickets();
+      await signInAdmin(email, password);
+      const data = await fetchTickets();
+      setTickets(data);
       setEmail('');
       setPassword('');
     } catch (e: unknown) {
@@ -92,7 +105,7 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await signOutAdmin();
     setSelectedTicket(null);
   };
 
@@ -112,21 +125,19 @@ export default function AdminDashboard() {
       // Combine old afterImages with new ones
       const combinedAfterImages = [...(selectedTicket.afterImages || []), ...addedAfterUrls];
 
-      // 2. Update Firestore document
-      const ticketRef = doc(db, 'tickets', selectedTicket.dbId);
-      await updateDoc(ticketRef, {
+      await updateTicket(selectedTicket.dbId, {
         status: updateStatus,
         managerFeedback: updateFeedback,
         afterDetail: updateAfterDetail,
-        afterImages: combinedAfterImages
+        afterImages: combinedAfterImages,
       });
 
       Swal.fire({ icon: 'success', title: 'อัปเดตงานสำเร็จ', text: 'บันทึกข้อมูลเรียบร้อยแล้ว' });
       setSelectedTicket(null);
       setNewAfterImages([]);
       
-      // Refresh list
-      fetchTickets();
+      const data = await fetchTickets();
+      setTickets(data);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'ไม่สามารถบันทึกข้อมูลได้';
       Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: message });
@@ -146,6 +157,20 @@ export default function AdminDashboard() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="rounded-3xl bg-white px-6 py-8 shadow-xl border border-slate-100 text-slate-500">
           กำลังตรวจสอบสิทธิ์...
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-lg rounded-3xl border border-amber-300 bg-white p-8 text-center shadow-xl">
+          <h1 className="mb-4 text-2xl font-bold text-amber-700">Supabase ยังไม่ถูกตั้งค่า</h1>
+          <p className="text-sm leading-relaxed text-slate-600">
+            เพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_ANON_KEY` ใน `.env.local`
+            จากนั้นสร้างตารางและ bucket ตามไฟล์ `supabase/setup.sql`
+          </p>
         </div>
       </div>
     );
