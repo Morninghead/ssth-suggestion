@@ -218,13 +218,13 @@ export async function signOutAdmin() {
 
 export async function getCurrentAdminUser(): Promise<User | null> {
   const client = requireSupabase();
-  const { data, error } = await client.auth.getUser();
+  const { data, error } = await client.auth.getSession();
 
   if (error) {
     throw error;
   }
 
-  return data.user;
+  return data.session?.user ?? null;
 }
 
 export function subscribeToAdminAuthState(callback: (user: User | null) => void) {
