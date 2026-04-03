@@ -4,8 +4,22 @@ import { useState } from 'react';
 import Swal from 'sweetalert2';
 import { db, collection, addDoc, uploadImages, Timestamp } from '../lib/firebase';
 
+type SuggestionFormData = {
+  fullName: string;
+  department: string;
+  productionLine: string;
+  otherDepartment: string;
+  suggestionType: string;
+  detail: string;
+  cause: string;
+  problem: string;
+  solution: string;
+};
+
+type DetailField = 'detail' | 'cause' | 'problem' | 'solution';
+
 export default function Home() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SuggestionFormData>({
     fullName: '',
     department: '',
     productionLine: '',
@@ -35,9 +49,16 @@ export default function Home() {
     { value: 'People & Culture', desc: 'มุ่งเน้นคน คุณภาพชีวิต ความก้าวหน้า' },
   ];
 
+  const detailFields: Array<{ name: DetailField; label: string }> = [
+    { name: 'detail', label: 'รายละเอียด' },
+    { name: 'cause', label: 'สาเหตุ' },
+    { name: 'problem', label: 'ปัญหา' },
+    { name: 'solution', label: 'การแก้ไข' },
+  ];
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name as keyof SuggestionFormData]: value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
@@ -91,8 +112,9 @@ export default function Home() {
       });
       setBeforeImages([]);
       setAfterImages([]);
-    } catch (error: any) {
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'ไม่สามารถบันทึกข้อมูลได้';
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: message });
     } finally {
       setIsSubmitting(false);
     }
@@ -167,15 +189,20 @@ export default function Home() {
         <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100">
           <h2 className="text-lg font-bold mb-4">📝 รายละเอียดนวัตกรรม</h2>
           <div className="space-y-4">
-            {['detail:รายละเอียด', 'cause:สาเหตุ', 'problem:ปัญหา', 'solution:การแก้ไข'].map((item, i) => {
-              const [key, label] = item.split(':');
-              return (
-                <div key={i}>
-                  <label className="block text-sm font-semibold mb-1">{label} <span className="text-red-500">*</span></label>
-                  <textarea name={key} value={(formData as any)[key]} onChange={handleInputChange} required rows={3} className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:border-blue-500 outline-none" placeholder={`อธิบาย${label}...`}></textarea>
-                </div>
-              );
-            })}
+            {detailFields.map((field) => (
+              <div key={field.name}>
+                <label className="block text-sm font-semibold mb-1">{field.label} <span className="text-red-500">*</span></label>
+                <textarea
+                  name={field.name}
+                  value={formData[field.name]}
+                  onChange={handleInputChange}
+                  required
+                  rows={3}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:border-blue-500 outline-none"
+                  placeholder={`อธิบาย${field.label}...`}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
@@ -193,7 +220,7 @@ export default function Home() {
               </div>
               <div className="flex gap-2 mt-3 overflow-x-auto">
                 {beforeImages.map((file, i) => (
-                  <img key={i} src={URL.createObjectURL(file)} className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" alt="Preview before" />
+                  <img key={i} src={URL.createObjectURL(file)} className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" alt={`Before preview ${i + 1}`} />
                 ))}
               </div>
             </div>
@@ -206,7 +233,7 @@ export default function Home() {
               </div>
               <div className="flex gap-2 mt-3 overflow-x-auto">
                 {afterImages.map((file, i) => (
-                  <img key={i} src={URL.createObjectURL(file)} className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" alt="Preview after" />
+                  <img key={i} src={URL.createObjectURL(file)} className="w-16 h-16 object-cover rounded-lg border flex-shrink-0" alt={`After preview ${i + 1}`} />
                 ))}
               </div>
             </div>

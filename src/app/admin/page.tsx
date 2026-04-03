@@ -1,47 +1,104 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { db, collection, getDocs, updateDoc, doc, query, orderBy, uploadImages } from '../../lib/firebase';
+import { auth } from '../../lib/firebase';
+
+type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Rejected';
+
+type TicketRecord = {
+  dbId: string;
+  ticketId: string;
+  fullName: string;
+  department: string;
+  productionLine?: string;
+  otherDepartment?: string;
+  suggestionType: string;
+  detail: string;
+  cause: string;
+  problem: string;
+  solution: string;
+  beforeImages?: string[];
+  afterImages?: string[];
+  status: TicketStatus;
+  managerFeedback?: string;
+  afterDetail?: string;
+};
 
 export default function AdminDashboard() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [filter, setFilter] = useState('Pending');
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [filter, setFilter] = useState<TicketStatus | 'All'>('Pending');
   
   // Selection for edit
-  const [selectedTicket, setSelectedTicket] = useState<any>(null);
-  const [updateStatus, setUpdateStatus] = useState('Pending');
+  const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<TicketStatus>('Pending');
   const [updateFeedback, setUpdateFeedback] = useState('');
   const [updateAfterDetail, setUpdateAfterDetail] = useState('');
   const [newAfterImages, setNewAfterImages] = useState<File[]>([]);
 
-  const fetchTickets = async () => {
+  async function fetchTickets() {
     try {
       const q = query(collection(db, 'tickets'), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({
-        dbId: doc.id,
-        ...doc.data()
+      const data = querySnapshot.docs.map((snapshot) => ({
+        dbId: snapshot.id,
+        ...(snapshot.data() as Omit<TicketRecord, 'dbId'>),
       }));
       setTickets(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       // Fallback or handle error
     }
-  };
+  }
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      setAuthLoading(false);
+
+      if (!user) {
+        setTickets([]);
+        setSelectedTicket(null);
+        return;
+      }
+
+      void fetchTickets();
+    });
+
+    return unsubscribe;
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In real app: Authenticate with Firebase Auth
-    // Hardcoded simple protection for now
-    setIsLoggedIn(true);
-    await fetchTickets();
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      await fetchTickets();
+      setEmail('');
+      setPassword('');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'กรุณาตรวจสอบอีเมลและรหัสผ่าน';
+      Swal.fire({
+        icon: 'error',
+        title: 'เข้าสู่ระบบไม่สำเร็จ',
+        text: message,
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setSelectedTicket(null);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTicket) return;
+    if (!selectedTicket || !authUser) return;
 
     Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
@@ -70,12 +127,13 @@ export default function AdminDashboard() {
       
       // Refresh list
       fetchTickets();
-    } catch (e: any) {
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: e.message });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'ไม่สามารถบันทึกข้อมูลได้';
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: message });
     }
   };
 
-  const openTicket = (t: any) => {
+  const openTicket = (t: TicketRecord) => {
     setSelectedTicket(t);
     setUpdateStatus(t.status || 'Pending');
     setUpdateFeedback(t.managerFeedback || '');
@@ -83,15 +141,39 @@ export default function AdminDashboard() {
     setNewAfterImages([]);
   };
 
-  if (!isLoggedIn) {
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="rounded-3xl bg-white px-6 py-8 shadow-xl border border-slate-100 text-slate-500">
+          กำลังตรวจสอบสิทธิ์...
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border top-0 border-slate-100">
           <div className="text-5xl mb-4">🛡️</div>
           <h1 className="text-xl font-bold text-teal-700 mb-6">กรุณาเข้าสู่ระบบ</h1>
           <form onSubmit={handleLogin} className="space-y-4">
-            <input type="text" placeholder="ชื่อผู้ใช้งาน" className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none" required />
-            <input type="password" placeholder="รหัสผ่าน" className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none" required />
+            <input
+              type="email"
+              placeholder="อีเมลผู้ดูแล"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none"
+              required
+            />
+            <input
+              type="password"
+              placeholder="รหัสผ่าน"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none"
+              required
+            />
             <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">เข้าสู่ระบบ</button>
           </form>
         </div>
@@ -132,7 +214,7 @@ export default function AdminDashboard() {
               <span className="text-slate-500 font-bold block mb-2">รูปภาพ Before</span>
               <div className="flex gap-2 overflow-x-auto">
                 {selectedTicket.beforeImages?.map((url: string, i: number) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" /></a>
+                  <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" alt={`Before image ${i + 1}`} /></a>
                 ))}
                 {(!selectedTicket.beforeImages || selectedTicket.beforeImages.length === 0) && <span className="text-xs text-slate-400">ไม่มีรูปภาพ</span>}
               </div>
@@ -142,7 +224,7 @@ export default function AdminDashboard() {
               <span className="text-slate-500 font-bold block mb-2">รูปภาพ After (ที่มีแล้ว)</span>
               <div className="flex gap-2 overflow-x-auto">
                 {selectedTicket.afterImages?.map((url: string, i: number) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" /></a>
+                  <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" alt={`After image ${i + 1}`} /></a>
                 ))}
                 {(!selectedTicket.afterImages || selectedTicket.afterImages.length === 0) && <span className="text-xs text-slate-400">ไม่มีรูปภาพ</span>}
               </div>
@@ -154,7 +236,7 @@ export default function AdminDashboard() {
             <form onSubmit={handleUpdate} className="space-y-4 text-sm">
               <div>
                 <label className="block font-bold text-slate-600 mb-1">สถานะ</label>
-                <select value={updateStatus} onChange={e => setUpdateStatus(e.target.value)} className="w-full border rounded-xl p-3 bg-white outline-none focus:ring-2 focus:ring-teal-500">
+                <select value={updateStatus} onChange={e => setUpdateStatus(e.target.value as TicketStatus)} className="w-full border rounded-xl p-3 bg-white outline-none focus:ring-2 focus:ring-teal-500">
                   <option value="Pending">Pending (รอดำเนินการ)</option>
                   <option value="Approved">Approved (อนุมัติ/กำลังทำ)</option>
                   <option value="Completed">Completed (เสร็จสิ้น)</option>
@@ -195,18 +277,19 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold">Hyeok-sin Admin</h1>
           <p className="text-sm opacity-90">ระบบภาพรวมนวัตกรรม</p>
         </div>
-        <button onClick={() => setIsLoggedIn(false)} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">ออกจากระบบ</button>
+        <button onClick={handleLogout} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">ออกจากระบบ</button>
       </div>
 
       <div className="max-w-5xl mx-auto p-4 mt-4">
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <h2 className="text-lg font-bold flex items-center gap-2">📋 รายการตรวจสอบ</h2>
-            <select value={filter} onChange={e => setFilter(e.target.value)} className="border rounded-xl p-2 px-4 outline-none text-sm font-semibold text-slate-700 bg-slate-50">
+            <select value={filter} onChange={e => setFilter(e.target.value as TicketStatus | 'All')} className="border rounded-xl p-2 px-4 outline-none text-sm font-semibold text-slate-700 bg-slate-50">
               <option value="All">ทั้งหมด</option>
               <option value="Pending">Pending (รอดำเนินการ)</option>
               <option value="Approved">Approved (กำลังทำ)</option>
               <option value="Completed">Completed (เสร็จสิ้น)</option>
+              <option value="Rejected">Rejected (ไม่ผ่าน)</option>
             </select>
           </div>
 
@@ -231,7 +314,8 @@ export default function AdminDashboard() {
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                         t.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 
                         t.status === 'Approved' ? 'bg-blue-100 text-blue-700' :
-                        'bg-green-100 text-green-700'
+                        t.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                        'bg-slate-100 text-slate-700'
                       }`}>{t.status}</span>
                     </td>
                     <td className="py-4 px-2">

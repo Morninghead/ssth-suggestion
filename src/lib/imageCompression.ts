@@ -1,4 +1,4 @@
-export const compressImage = async (file: File, maxSizeMB: number = 0.5, maxWidthOrHeight: number = 1920): Promise<File> => {
+export const compressImage = async (file: File, maxWidthOrHeight: number = 1920): Promise<File> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -32,7 +32,7 @@ export const compressImage = async (file: File, maxSizeMB: number = 0.5, maxWidt
         ctx.drawImage(img, 0, 0, width, height);
 
         // adjust quality to match approx maxSizeMB
-        let quality = 0.8;
+        const quality = 0.8;
         canvas.toBlob((blob) => {
           if (blob) {
             const compressedFile = new File([blob], file.name, {
