@@ -230,6 +230,40 @@ export async function getCurrentAdminUser(): Promise<User | null> {
   return data.session?.user ?? null;
 }
 
+export async function getCurrentAuthSession() {
+  const client = requireSupabase();
+  const { data, error } = await client.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  return data.session;
+}
+
+export async function updateAdminPassword(password: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.auth.updateUser({ password });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.user;
+}
+
+export async function requestAdminPasswordReset(email: string, redirectTo: string) {
+  const client = requireSupabase();
+  const normalizedEmail = email.trim().toLowerCase();
+  const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function subscribeToAdminAuthState(callback: (user: User | null) => void) {
   const client = requireSupabase();
   return client.auth.onAuthStateChange((_event, session) => {

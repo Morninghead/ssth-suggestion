@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
+import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import {
   fetchTickets,
@@ -9,6 +10,7 @@ import {
   isSupabaseConfigured,
   isPrimaryAdmin,
   PRIMARY_ADMIN_EMAIL,
+  requestAdminPasswordReset,
   signInAdmin,
   signOutAdmin,
   subscribeToAdminAuthState,
@@ -53,6 +55,7 @@ export default function AdminDashboard() {
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
   const [filter, setFilter] = useState<TicketStatus | 'All'>('Pending');
   
@@ -154,6 +157,33 @@ export default function AdminDashboard() {
     setSelectedTicket(null);
   };
 
+  const handleForgotPassword = async () => {
+    setResetLoading(true);
+
+    try {
+      const redirectTo =
+        typeof window === 'undefined'
+          ? ''
+          : `${window.location.origin}/reset-password`;
+
+      await requestAdminPasswordReset(PRIMARY_ADMIN_EMAIL, redirectTo);
+      await Swal.fire({
+        icon: 'success',
+        title: 'ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว',
+        text: `กรุณาตรวจสอบอีเมล ${PRIMARY_ADMIN_EMAIL} แล้วเปิดลิงก์เพื่อกำหนดรหัสผ่านใหม่`,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? getAdminLoginMessage(error) : 'ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้';
+      await Swal.fire({
+        icon: 'error',
+        title: 'ส่งลิงก์ไม่สำเร็จ',
+        text: message,
+      });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !authUser) return;
@@ -253,6 +283,22 @@ export default function AdminDashboard() {
             />
             <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">เข้าสู่ระบบ</button>
           </form>
+          <div className="mt-4 space-y-2 text-center">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              className="text-sm font-semibold text-teal-700 transition hover:text-teal-800 disabled:cursor-not-allowed disabled:text-slate-400"
+            >
+              {resetLoading ? 'กำลังส่งลิงก์...' : 'ลืมรหัสผ่าน?'}
+            </button>
+            <p className="text-[11px] text-slate-400">
+              หากเปิดอีเมลจากลิงก์ reset แล้วเด้งกลับหน้าแรก ระบบจะพาไปหน้าเปลี่ยนรหัสผ่านให้อัตโนมัติ
+            </p>
+            <p className="text-[11px] text-slate-400">
+              หรือเปิดตรงที่ <Link href="/reset-password" className="font-semibold text-teal-700 hover:text-teal-800">หน้าเปลี่ยนรหัสผ่าน</Link>
+            </p>
+          </div>
         </div>
       </div>
     );

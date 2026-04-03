@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import { createTicket, isSupabaseConfigured, uploadImages } from '../lib/supabase';
 
@@ -34,6 +34,24 @@ export default function Home() {
   const [beforeImages, setBeforeImages] = useState<File[]>([]);
   const [afterImages, setAfterImages] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const hash = window.location.hash;
+    if (!hash) {
+      return;
+    }
+
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    if (params.get('type') !== 'recovery' || !params.get('access_token')) {
+      return;
+    }
+
+    window.location.replace(`/reset-password${hash}`);
+  }, []);
 
   const departments = [
     'Admin', 'Material/Purchasing', 'SCM', 'QA', 'R&D', 'Maintenance', 
