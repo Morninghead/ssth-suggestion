@@ -9,7 +9,7 @@ import {
   isSupabaseConfigured,
   isPrimaryAdmin,
   PRIMARY_ADMIN_EMAIL,
-  PRIMARY_ADMIN_USER_ID,
+  PRIMARY_ADMIN_UUID,
   signInAdmin,
   signOutAdmin,
   subscribeToAdminAuthState,
@@ -18,6 +18,32 @@ import {
   updateTicket,
   uploadImages,
 } from '../../lib/supabase';
+
+function getAdminLoginMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return 'กรุณาตรวจสอบอีเมล รหัสผ่าน และสถานะผู้ใช้ใน Supabase Auth';
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes('invalid login credentials')) {
+    return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือผู้ใช้นี้ยังไม่ได้ถูกสร้างใน Supabase Auth';
+  }
+
+  if (message.includes('email not confirmed')) {
+    return 'บัญชีนี้ยังไม่ยืนยันอีเมล กรุณายืนยันอีเมลใน Supabase หรือปิด email confirmation ชั่วคราว';
+  }
+
+  if (message.includes('email rate limit exceeded')) {
+    return 'มีการลองเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่';
+  }
+
+  if (message.includes('ไม่มีสิทธิ์ผู้ดูแลระบบ')) {
+    return error.message;
+  }
+
+  return `${error.message} | ตรวจสอบว่าเปิด Email provider, สร้างผู้ใช้ nopanat.aplus@gmail.com และ UUID ตรงกับที่กำหนด`;
+}
 
 export default function AdminDashboard() {
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -111,11 +137,11 @@ export default function AdminDashboard() {
       setEmail('');
       setPassword('');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'กรุณาตรวจสอบอีเมลและรหัสผ่าน';
       Swal.fire({
         icon: 'error',
         title: 'เข้าสู่ระบบไม่สำเร็จ',
-        text: message,
+        text: getAdminLoginMessage(e),
+        footer: `Admin email: ${PRIMARY_ADMIN_EMAIL}`,
       });
     }
   };
@@ -202,7 +228,11 @@ export default function AdminDashboard() {
             อนุญาตเฉพาะผู้ดูแลหลัก: {PRIMARY_ADMIN_EMAIL}
           </p>
           <p className="mb-4 text-[11px] text-slate-400">
-            Admin user ID: {PRIMARY_ADMIN_USER_ID}
+            Admin user UUID: {PRIMARY_ADMIN_UUID}
+          </p>
+          <p className="mb-4 text-[11px] leading-relaxed text-slate-400">
+            ถ้า login ไม่ผ่าน ให้ตรวจสอบใน Supabase ว่าเปิด Email provider แล้ว, ผู้ใช้ถูกสร้างแล้ว,
+            และถ้ายังเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
