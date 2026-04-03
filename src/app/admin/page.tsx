@@ -50,6 +50,65 @@ function getAdminLoginMessage(error: unknown) {
   return `${error.message} | ตรวจสอบว่าเปิด Email provider และสร้างผู้ใช้ผู้ดูแลด้วยอีเมล ${PRIMARY_ADMIN_EMAIL}`;
 }
 
+function getStatusMeta(status: TicketStatus) {
+  switch (status) {
+    case 'Pending':
+      return {
+        label: 'รอดำเนินการ',
+        badgeClass: 'bg-amber-100 text-amber-700',
+        cardClass: 'from-amber-50 to-white border-amber-200',
+      };
+    case 'Approved':
+      return {
+        label: 'กำลังทำ',
+        badgeClass: 'bg-sky-100 text-sky-700',
+        cardClass: 'from-sky-50 to-white border-sky-200',
+      };
+    case 'Completed':
+      return {
+        label: 'เสร็จสิ้น',
+        badgeClass: 'bg-emerald-100 text-emerald-700',
+        cardClass: 'from-emerald-50 to-white border-emerald-200',
+      };
+    case 'Rejected':
+      return {
+        label: 'ไม่ผ่าน',
+        badgeClass: 'bg-rose-100 text-rose-700',
+        cardClass: 'from-rose-50 to-white border-rose-200',
+      };
+    default:
+      return {
+        label: status,
+        badgeClass: 'bg-slate-100 text-slate-700',
+        cardClass: 'from-slate-50 to-white border-slate-200',
+      };
+  }
+}
+
+function buildRankings(values: string[], total: number) {
+  const counts = new Map<string, number>();
+
+  values.forEach((value) => {
+    const key = value?.trim() || 'ไม่ระบุ';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({
+      label,
+      count,
+      percentage: total > 0 ? Math.round((count / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function formatTicketDate(value: string) {
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
 export default function AdminDashboard() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
@@ -227,6 +286,62 @@ export default function AdminDashboard() {
     setNewAfterImages([]);
   };
 
+  const filteredTickets = tickets.filter((ticket) => filter === 'All' || ticket.status === filter);
+  const totalTickets = tickets.length;
+  const completedTickets = tickets.filter((ticket) => ticket.status === 'Completed').length;
+  const pendingTickets = tickets.filter((ticket) => ticket.status === 'Pending').length;
+  const approvedTickets = tickets.filter((ticket) => ticket.status === 'Approved').length;
+  const rejectedTickets = tickets.filter((ticket) => ticket.status === 'Rejected').length;
+  const completionRate = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
+  const resolvedTickets = completedTickets + rejectedTickets;
+  const resolvedRate = totalTickets > 0 ? Math.round((resolvedTickets / totalTickets) * 100) : 0;
+  const ticketsWithImages = tickets.filter(
+    (ticket) => ticket.beforeImages.length > 0 || ticket.afterImages.length > 0,
+  ).length;
+  const imageCoverage = totalTickets > 0 ? Math.round((ticketsWithImages / totalTickets) * 100) : 0;
+  const thisMonth = new Date();
+  const thisMonthTickets = tickets.filter((ticket) => {
+    const createdAt = new Date(ticket.createdAt);
+    return (
+      createdAt.getFullYear() === thisMonth.getFullYear() &&
+      createdAt.getMonth() === thisMonth.getMonth()
+    );
+  }).length;
+
+  const departmentRanking = buildRankings(
+    tickets.map((ticket) => {
+      if (ticket.department === 'อื่นๆ' && ticket.otherDepartment.trim()) {
+        return ticket.otherDepartment;
+      }
+
+      return ticket.department;
+    }),
+    totalTickets,
+  );
+  const suggestionTypeRanking = buildRankings(
+    tickets.map((ticket) => ticket.suggestionType),
+    totalTickets,
+  );
+  const topDepartment = departmentRanking[0]?.label || '-';
+
+  const monthlyTrend = Array.from({ length: 6 }, (_, index) => {
+    const bucketDate = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - (5 - index), 1);
+    const count = tickets.filter((ticket) => {
+      const createdAt = new Date(ticket.createdAt);
+      return (
+        createdAt.getFullYear() === bucketDate.getFullYear() &&
+        createdAt.getMonth() === bucketDate.getMonth()
+      );
+    }).length;
+
+    return {
+      label: new Intl.DateTimeFormat('th-TH', { month: 'short', year: '2-digit' }).format(bucketDate),
+      count,
+    };
+  });
+  const maxMonthlyCount = Math.max(...monthlyTrend.map((item) => item.count), 1);
+  const latestTickets = tickets.slice(0, 5);
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -318,10 +433,30 @@ export default function AdminDashboard() {
         <div className="max-w-3xl mx-auto p-4 space-y-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-teal-700 mb-4 border-b pb-2">📌 รายละเอียดนวัตกรรม (Before)</h2>
-            <div className="grid gap-3 text-sm">
+            <div className="grid gap-3 text-sm md:grid-cols-2">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <span className="text-slate-500 font-bold block mb-1">Ticket ID</span>
                 <div className="font-medium text-slate-800">{selectedTicket.ticketId}</div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-slate-500 font-bold block mb-1">สถานะปัจจุบัน</span>
+                <div>
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(selectedTicket.status).badgeClass}`}>
+                    {selectedTicket.status}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-slate-500 font-bold block mb-1">ผู้ส่ง</span>
+                <div className="text-slate-800">{selectedTicket.fullName}</div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-slate-500 font-bold block mb-1">แผนก</span>
+                <div className="text-slate-800">
+                  {selectedTicket.department === 'อื่นๆ' && selectedTicket.otherDepartment
+                    ? selectedTicket.otherDepartment
+                    : selectedTicket.department}
+                </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <span className="text-slate-500 font-bold block mb-1">ปัญหาที่พบ</span>
@@ -330,6 +465,14 @@ export default function AdminDashboard() {
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <span className="text-slate-500 font-bold block mb-1">การแก้ไข</span>
                 <div className="text-slate-800">{selectedTicket.solution}</div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 md:col-span-2">
+                <span className="text-slate-500 font-bold block mb-1">รายละเอียด</span>
+                <div className="text-slate-800 whitespace-pre-wrap">{selectedTicket.detail}</div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 md:col-span-2">
+                <span className="text-slate-500 font-bold block mb-1">สาเหตุ</span>
+                <div className="text-slate-800 whitespace-pre-wrap">{selectedTicket.cause}</div>
               </div>
             </div>
             
@@ -359,7 +502,11 @@ export default function AdminDashboard() {
             <form onSubmit={handleUpdate} className="space-y-4 text-sm">
               <div>
                 <label className="block font-bold text-slate-600 mb-1">สถานะ</label>
-                <select value={updateStatus} onChange={e => setUpdateStatus(e.target.value as TicketStatus)} className="w-full border rounded-xl p-3 bg-white outline-none focus:ring-2 focus:ring-teal-500">
+                <select
+                  value={updateStatus}
+                  onChange={e => setUpdateStatus(e.target.value as TicketStatus)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 outline-none focus:ring-2 focus:ring-teal-500"
+                >
                   <option value="Pending">Pending (รอดำเนินการ)</option>
                   <option value="Approved">Approved (อนุมัติ/กำลังทำ)</option>
                   <option value="Completed">Completed (เสร็จสิ้น)</option>
@@ -369,17 +516,35 @@ export default function AdminDashboard() {
               
               <div>
                 <label className="block font-bold text-slate-600 mb-1">ข้อเสนอแนะจากผู้บริหาร</label>
-                <textarea rows={3} value={updateFeedback} onChange={e => setUpdateFeedback(e.target.value)} className="w-full border rounded-xl p-3 outline-none focus:ring-2 focus:ring-teal-500" placeholder="พิมพ์ข้อเสนอแนะ.."></textarea>
+                <textarea
+                  rows={3}
+                  value={updateFeedback}
+                  onChange={e => setUpdateFeedback(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  placeholder="พิมพ์ข้อเสนอแนะ.."
+                ></textarea>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-600 mb-1">ข้อมูลหลังการแก้ไข</label>
-                <textarea rows={3} value={updateAfterDetail} onChange={e => setUpdateAfterDetail(e.target.value)} className="w-full border rounded-xl p-3 outline-none focus:ring-2 focus:ring-teal-500" placeholder="ผลลัพธ์ที่ได้.."></textarea>
+                <textarea
+                  rows={3}
+                  value={updateAfterDetail}
+                  onChange={e => setUpdateAfterDetail(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  placeholder="ผลลัพธ์ที่ได้.."
+                ></textarea>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-600 mb-1">เพิ่มรูปหลังแก้ไข (After Image)</label>
-                <input type="file" multiple accept="image/*" onChange={e => e.target.files && setNewAfterImages(Array.from(e.target.files))} className="w-full border rounded-xl p-2" />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={e => e.target.files && setNewAfterImages(Array.from(e.target.files))}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-teal-700"
+                />
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -404,9 +569,181 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-5xl mx-auto p-4 mt-4">
+        <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-teal-700">ข้อเสนอทั้งหมด</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{totalTickets}</p>
+            <p className="mt-2 text-xs text-slate-500">งานใหม่เดือนนี้ {thisMonthTickets} รายการ</p>
+          </div>
+          <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-emerald-700">อัตราปิดงาน</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{completionRate}%</p>
+            <p className="mt-2 text-xs text-slate-500">เสร็จสิ้นแล้ว {completedTickets} จาก {totalTickets || 0} งาน</p>
+          </div>
+          <div className="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-sky-700">งานที่มีรูปแนบ</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{imageCoverage}%</p>
+            <p className="mt-2 text-xs text-slate-500">มีรูปก่อนหรือหลังรวม {ticketsWithImages} รายการ</p>
+          </div>
+          <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-violet-700">แผนกที่ส่งมากสุด</p>
+            <p className="mt-2 text-2xl font-bold text-slate-800">{topDepartment}</p>
+            <p className="mt-2 text-xs text-slate-500">อัตรางานปิดแล้ว {resolvedRate}%</p>
+          </div>
+        </div>
+
+        <div className="mb-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-800">ภาพรวมสถานะงาน</h2>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                อัปเดตจากข้อมูลล่าสุด
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {([
+                ['Pending', pendingTickets],
+                ['Approved', approvedTickets],
+                ['Completed', completedTickets],
+                ['Rejected', rejectedTickets],
+              ] as Array<[TicketStatus, number]>).map(([status, count]) => {
+                const meta = getStatusMeta(status);
+                const width = totalTickets > 0 ? Math.max((count / totalTickets) * 100, count > 0 ? 8 : 0) : 0;
+
+                return (
+                  <div key={status} className={`rounded-2xl border bg-gradient-to-br p-4 ${meta.cardClass}`}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${meta.badgeClass}`}>{status}</span>
+                      <span className="text-sm font-semibold text-slate-500">{meta.label}</span>
+                    </div>
+                    <p className="text-3xl font-bold text-slate-800">{count}</p>
+                    <div className="mt-3 h-2 rounded-full bg-slate-100">
+                      <div className="h-2 rounded-full bg-teal-500" style={{ width: `${width}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-800">แนวโน้ม 6 เดือนล่าสุด</h2>
+              <span className="text-xs font-semibold text-slate-400">จำนวนข้อเสนอ</span>
+            </div>
+            <div className="space-y-4">
+              {monthlyTrend.map((item) => (
+                <div key={item.label}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-slate-600">{item.label}</span>
+                    <span className="text-slate-400">{item.count}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400"
+                      style={{ width: `${Math.max((item.count / maxMonthlyCount) * 100, item.count > 0 ? 10 : 0)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-800">รายงานตามแผนก</h2>
+              <span className="text-xs font-semibold text-slate-400">Top 6</span>
+            </div>
+            <div className="space-y-4">
+              {departmentRanking.slice(0, 6).map((item) => (
+                <div key={item.label}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-slate-700">{item.label}</span>
+                    <span className="text-slate-400">{item.count} งาน</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${item.percentage}%` }} />
+                  </div>
+                </div>
+              ))}
+              {departmentRanking.length === 0 && (
+                <p className="text-sm text-slate-400">ยังไม่มีข้อมูลสำหรับจัดอันดับแผนก</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-800">รายงานตามประเภทข้อเสนอ</h2>
+              <span className="text-xs font-semibold text-slate-400">Top 5</span>
+            </div>
+            <div className="space-y-4">
+              {suggestionTypeRanking.slice(0, 5).map((item) => (
+                <div key={item.label}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-slate-700">{item.label}</span>
+                    <span className="text-slate-400">{item.count} งาน</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100">
+                    <div className="h-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400" style={{ width: `${item.percentage}%` }} />
+                  </div>
+                </div>
+              ))}
+              {suggestionTypeRanking.length === 0 && (
+                <p className="text-sm text-slate-400">ยังไม่มีข้อมูลสำหรับจัดอันดับประเภทข้อเสนอ</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">รายงานล่าสุด</h2>
+              <p className="text-sm text-slate-500">รายการใหม่ล่าสุดและสถานะปัจจุบันสำหรับติดตามอย่างรวดเร็ว</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+              ล่าสุด {latestTickets.length} รายการ
+            </span>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {latestTickets.map((ticket) => (
+              <button
+                key={ticket.dbId}
+                type="button"
+                onClick={() => openTicket(ticket)}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-teal-300 hover:bg-white"
+              >
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-slate-800">{ticket.ticketId}</p>
+                    <p className="text-sm text-slate-500">{ticket.fullName}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(ticket.status).badgeClass}`}>
+                    {ticket.status}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600">
+                  {(ticket.department === 'อื่นๆ' && ticket.otherDepartment) || ticket.department}
+                </p>
+                <p className="mt-2 line-clamp-2 text-sm text-slate-500">{ticket.problem}</p>
+                <p className="mt-3 text-xs text-slate-400">{formatTicketDate(ticket.createdAt)}</p>
+              </button>
+            ))}
+            {latestTickets.length === 0 && (
+              <p className="text-sm text-slate-400">ยังไม่มีรายการล่าสุดให้แสดง</p>
+            )}
+          </div>
+        </div>
+
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <h2 className="text-lg font-bold flex items-center gap-2">📋 รายการตรวจสอบ</h2>
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2">📋 รายการตรวจสอบ</h2>
+              <p className="mt-1 text-sm text-slate-500">แสดงผล {filteredTickets.length} จากทั้งหมด {totalTickets} รายการ</p>
+            </div>
             <select value={filter} onChange={e => setFilter(e.target.value as TicketStatus | 'All')} className="border rounded-xl p-2 px-4 outline-none text-sm font-semibold text-slate-700 bg-slate-50">
               <option value="All">ทั้งหมด</option>
               <option value="Pending">Pending (รอดำเนินการ)</option>
@@ -423,31 +760,30 @@ export default function AdminDashboard() {
                   <th className="pb-3 px-2">Ticket ID</th>
                   <th className="pb-3 px-2">แผนก</th>
                   <th className="pb-3 px-2">ผู้ส่ง</th>
+                  <th className="pb-3 px-2">วันที่ส่ง</th>
                   <th className="pb-3 px-2">สถานะ</th>
                   <th className="pb-3 px-2">จัดการ</th>
                 </tr>
               </thead>
               <tbody>
-                {tickets.filter(t => filter === 'All' || t.status === filter).map(t => (
+                {filteredTickets.map(t => (
                   <tr key={t.dbId} className="border-b transition hover:bg-slate-50">
                     <td className="py-4 px-2 font-bold text-slate-700">{t.ticketId}</td>
-                    <td className="py-4 px-2 text-slate-600">{t.department}</td>
+                    <td className="py-4 px-2 text-slate-600">
+                      {(t.department === 'อื่นๆ' && t.otherDepartment) || t.department}
+                    </td>
                     <td className="py-4 px-2 text-slate-600">{t.fullName}</td>
+                    <td className="py-4 px-2 text-slate-500">{formatTicketDate(t.createdAt)}</td>
                     <td className="py-4 px-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        t.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 
-                        t.status === 'Approved' ? 'bg-blue-100 text-blue-700' :
-                        t.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>{t.status}</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusMeta(t.status).badgeClass}`}>{t.status}</span>
                     </td>
                     <td className="py-4 px-2">
                       <button onClick={() => openTicket(t)} className="bg-teal-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-teal-700">ดู/แก้ไข</button>
                     </td>
                   </tr>
                 ))}
-                {tickets.filter(t => filter === 'All' || t.status === filter).length === 0 && (
-                  <tr><td colSpan={5} className="py-8 text-center text-slate-400">ไม่พบรายการข้อมูล</td></tr>
+                {filteredTickets.length === 0 && (
+                  <tr><td colSpan={6} className="py-8 text-center text-slate-400">ไม่พบรายการข้อมูล</td></tr>
                 )}
               </tbody>
             </table>
