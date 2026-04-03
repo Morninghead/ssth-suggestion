@@ -9,7 +9,6 @@ import {
   isSupabaseConfigured,
   isPrimaryAdmin,
   PRIMARY_ADMIN_EMAIL,
-  PRIMARY_ADMIN_UUID,
   signInAdmin,
   signOutAdmin,
   subscribeToAdminAuthState,
@@ -224,15 +223,12 @@ export default function AdminDashboard() {
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border top-0 border-slate-100">
           <div className="text-5xl mb-4">🛡️</div>
           <h1 className="text-xl font-bold text-teal-700 mb-6">กรุณาเข้าสู่ระบบ</h1>
-          <p className="mb-4 text-xs text-slate-500">
-            อนุญาตเฉพาะผู้ดูแลหลัก: {PRIMARY_ADMIN_EMAIL}
-          </p>
-          <p className="mb-4 text-[11px] text-slate-400">
-            Admin user UUID: {PRIMARY_ADMIN_UUID}
+          <p className="mb-4 text-sm leading-relaxed text-slate-500">
+            เข้าสู่ระบบด้วยบัญชีผู้ดูแลที่สร้างไว้ใน Supabase Auth
           </p>
           <p className="mb-4 text-[11px] leading-relaxed text-slate-400">
-            ถ้า login ไม่ผ่าน ให้ตรวจสอบใน Supabase ว่าเปิด Email provider แล้ว, ผู้ใช้ถูกสร้างแล้ว,
-            และถ้ายังเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน
+            ถ้า login ไม่ผ่าน ให้ตรวจสอบว่าเปิด Email provider แล้ว, สร้างผู้ใช้ผู้ดูแลแล้ว,
+            และหากเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
@@ -240,7 +236,7 @@ export default function AdminDashboard() {
               placeholder="อีเมลผู้ดูแล"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
               required
             />
             <input
@@ -248,7 +244,7 @@ export default function AdminDashboard() {
               placeholder="รหัสผ่าน"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border rounded-xl p-3 text-center focus:ring-2 focus:ring-teal-500 outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
               required
             />
             <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">เข้าสู่ระบบ</button>
