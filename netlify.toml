@@ -4,3 +4,5 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NEXT_PUBLIC_SUPABASE_URL = "https://ysmuzyjeeaasvjedvlmf.supabase.co"
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_c5GOU80vF2UB7Q2YikjB8Q_m2IWt6cZ"

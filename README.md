@@ -34,15 +34,17 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 This app uses Supabase for ticket data, image uploads, and admin authentication.
 
 1. Create a Supabase project.
-2. In `Project Settings > API`, copy the project URL and anon key into `.env.local`.
+2. In `Project Settings > API`, copy the project URL and publishable key into `.env.local`.
 3. In the SQL editor, run [`supabase/setup.sql`](/x:/Hyeon-sin/hyeoksin-web/supabase/setup.sql).
 4. In `Authentication > Sign In / Providers`, enable Email login.
-5. Create your admin user in `Authentication > Users`.
+5. Create your admin user in `Authentication > Users` with email `nopanat.aplus@gmail.com`.
+6. Confirm the admin user ID is `e58d7131-8935-4093-b27d-042ab1e8c49d`.
 
 The SQL file creates:
 - the `tickets` table
 - a public `tickets` storage bucket
-- row level security policies for public submissions and authenticated admin access
+- row level security policies for public submissions and admin access restricted to `nopanat.aplus@gmail.com`
+- an additional hard check for admin user ID `e58d7131-8935-4093-b27d-042ab1e8c49d`
 
 ## Netlify Deploy
 
@@ -50,7 +52,7 @@ If you deploy this repo to Netlify, set these environment variables in the Netli
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
 ## Deploy on Vercel

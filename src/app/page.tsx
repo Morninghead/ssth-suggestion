@@ -72,7 +72,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      Swal.fire({ icon: 'error', title: 'Supabase ยังไม่ถูกตั้งค่า', text: 'กรุณาเพิ่ม NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ก่อนใช้งาน' });
+      Swal.fire({ icon: 'error', title: 'Supabase ยังไม่ถูกตั้งค่า', text: 'กรุณาเพิ่ม NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ก่อนใช้งาน' });
       return;
     }
 
@@ -125,7 +125,7 @@ export default function Home() {
       {!isSupabaseConfigured && (
         <div className="mx-auto max-w-2xl px-4 pt-4">
           <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            ยังไม่ได้ตั้งค่า Supabase ในโปรเจกต์นี้ กรุณาเพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_ANON_KEY` ก่อนส่งข้อมูลจริง
+            ยังไม่ได้ตั้งค่า Supabase ในโปรเจกต์นี้ กรุณาเพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ก่อนส่งข้อมูลจริง
           </div>
         </div>
       )}

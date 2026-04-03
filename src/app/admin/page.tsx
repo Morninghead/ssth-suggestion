@@ -7,6 +7,9 @@ import {
   fetchTickets,
   getCurrentAdminUser,
   isSupabaseConfigured,
+  isPrimaryAdmin,
+  PRIMARY_ADMIN_EMAIL,
+  PRIMARY_ADMIN_USER_ID,
   signInAdmin,
   signOutAdmin,
   subscribeToAdminAuthState,
@@ -42,9 +45,10 @@ export default function AdminDashboard() {
       try {
         const user = await getCurrentAdminUser();
         if (!cancelled) {
-          setAuthUser(user);
+          const allowedUser = isPrimaryAdmin(user) ? user : null;
+          setAuthUser(allowedUser);
           setAuthLoading(false);
-          if (user) {
+          if (allowedUser) {
             const data = await fetchTickets();
             if (!cancelled) {
               setTickets(data);
@@ -62,6 +66,13 @@ export default function AdminDashboard() {
     void restoreSession();
 
     const { data: subscription } = subscribeToAdminAuthState(async (user) => {
+      if (!isPrimaryAdmin(user)) {
+        setAuthUser(null);
+        setTickets([]);
+        setSelectedTicket(null);
+        return;
+      }
+
       setAuthUser(user);
 
       if (!user) {
@@ -89,7 +100,12 @@ export default function AdminDashboard() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signInAdmin(email, password);
+      const user = await signInAdmin(email, password);
+      if (!isPrimaryAdmin(user)) {
+        await signOutAdmin();
+        throw new Error(`บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ ใช้อีเมล ${PRIMARY_ADMIN_EMAIL} เท่านั้น`);
+      }
+
       const data = await fetchTickets();
       setTickets(data);
       setEmail('');
@@ -168,7 +184,7 @@ export default function AdminDashboard() {
         <div className="w-full max-w-lg rounded-3xl border border-amber-300 bg-white p-8 text-center shadow-xl">
           <h1 className="mb-4 text-2xl font-bold text-amber-700">Supabase ยังไม่ถูกตั้งค่า</h1>
           <p className="text-sm leading-relaxed text-slate-600">
-            เพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_ANON_KEY` ใน `.env.local`
+            เพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ใน `.env.local`
             จากนั้นสร้างตารางและ bucket ตามไฟล์ `supabase/setup.sql`
           </p>
         </div>
@@ -182,6 +198,12 @@ export default function AdminDashboard() {
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border top-0 border-slate-100">
           <div className="text-5xl mb-4">🛡️</div>
           <h1 className="text-xl font-bold text-teal-700 mb-6">กรุณาเข้าสู่ระบบ</h1>
+          <p className="mb-4 text-xs text-slate-500">
+            อนุญาตเฉพาะผู้ดูแลหลัก: {PRIMARY_ADMIN_EMAIL}
+          </p>
+          <p className="mb-4 text-[11px] text-slate-400">
+            Admin user ID: {PRIMARY_ADMIN_USER_ID}
+          </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"

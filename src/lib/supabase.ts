@@ -1,6 +1,9 @@
 import { createClient, type User } from '@supabase/supabase-js';
 import { compressImage } from './imageCompression';
 
+export const PRIMARY_ADMIN_EMAIL = 'nopanat.aplus@gmail.com';
+export const PRIMARY_ADMIN_USER_ID = 'e58d7131-8935-4093-b27d-042ab1e8c49d';
+
 export type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Rejected';
 
 export type TicketRecord = {
@@ -66,12 +69,15 @@ type TicketUpdateInput = {
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabasePublishableKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+  ? createClient(supabaseUrl, supabasePublishableKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -81,7 +87,7 @@ export const supabase = isSupabaseConfigured
 
 function requireSupabase() {
   if (!supabase) {
-    throw new Error('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+    throw new Error('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.');
   }
 
   return supabase;
@@ -226,4 +232,11 @@ export function subscribeToAdminAuthState(callback: (user: User | null) => void)
   return client.auth.onAuthStateChange((_event, session) => {
     callback(session?.user ?? null);
   });
+}
+
+export function isPrimaryAdmin(user: Pick<User, 'id' | 'email'> | null) {
+  return (
+    user?.id === PRIMARY_ADMIN_USER_ID ||
+    user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL
+  );
 }

@@ -24,6 +24,16 @@ create index if not exists tickets_created_at_idx on public.tickets (created_at 
 
 alter table public.tickets enable row level security;
 
+create or replace function public.is_primary_admin()
+returns boolean
+language sql
+stable
+as $$
+  select
+    auth.uid() = 'e58d7131-8935-4093-b27d-042ab1e8c49d'::uuid
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'nopanat.aplus@gmail.com'
+$$;
+
 drop policy if exists "Anyone can insert tickets" on public.tickets;
 create policy "Anyone can insert tickets"
 on public.tickets
@@ -31,20 +41,20 @@ for insert
 to anon, authenticated
 with check (true);
 
-drop policy if exists "Authenticated users can read tickets" on public.tickets;
-create policy "Authenticated users can read tickets"
+drop policy if exists "Primary admin can read tickets" on public.tickets;
+create policy "Primary admin can read tickets"
 on public.tickets
 for select
 to authenticated
-using (true);
+using (public.is_primary_admin());
 
-drop policy if exists "Authenticated users can update tickets" on public.tickets;
-create policy "Authenticated users can update tickets"
+drop policy if exists "Primary admin can update tickets" on public.tickets;
+create policy "Primary admin can update tickets"
 on public.tickets
 for update
 to authenticated
-using (true)
-with check (true);
+using (public.is_primary_admin())
+with check (public.is_primary_admin());
 
 insert into storage.buckets (id, name, public)
 values ('tickets', 'tickets', true)
