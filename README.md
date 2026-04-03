@@ -47,6 +47,22 @@ firebase deploy --only firestore:rules,storage
 
 The repo includes `firestore.rules`, `storage.rules`, and `.env.example` as a starting point.
 
+## Netlify Deploy
+
+If you deploy this repo to Netlify, set these environment variables in the Netlify site settings:
+
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+```
+
+Netlify will use [`netlify.toml`](/x:/Hyeon-sin/hyeoksin-web/netlify.toml) to run `npm run build`.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
