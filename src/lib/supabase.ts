@@ -198,7 +198,11 @@ export async function updateTicket(ticketId: string, input: TicketUpdateInput) {
 
 export async function signInAdmin(email: string, password: string) {
   const client = requireSupabase();
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  const normalizedEmail = email.trim().toLowerCase();
+  const { data, error } = await client.auth.signInWithPassword({
+    email: normalizedEmail,
+    password,
+  });
 
   if (error) {
     throw error;

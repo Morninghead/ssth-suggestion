@@ -29,6 +29,10 @@ function getAdminLoginMessage(error: unknown) {
     return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือผู้ใช้นี้ยังไม่ได้ถูกสร้างใน Supabase Auth';
   }
 
+  if (message.includes('email logins are disabled') || message.includes('unsupported grant type')) {
+    return 'ใน Supabase ยังไม่ได้เปิด Email provider กรุณาไปที่ Authentication > Sign In / Providers แล้วเปิด Email';
+  }
+
   if (message.includes('email not confirmed')) {
     return 'บัญชีนี้ยังไม่ยืนยันอีเมล กรุณายืนยันอีเมลใน Supabase หรือปิด email confirmation ชั่วคราว';
   }
