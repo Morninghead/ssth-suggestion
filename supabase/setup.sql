@@ -30,8 +30,7 @@ language sql
 stable
 as $$
   select
-    auth.uid() = 'e58d7131-8935-4093-b27d-042ab1e8c49d'::uuid
-    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'nopanat.aplus@gmail.com'
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'nopanat.aplus@gmail.com'
 $$;
 
 drop policy if exists "Anyone can insert tickets" on public.tickets;

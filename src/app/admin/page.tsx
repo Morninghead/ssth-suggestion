@@ -45,7 +45,7 @@ function getAdminLoginMessage(error: unknown) {
     return error.message;
   }
 
-  return `${error.message} | ตรวจสอบว่าเปิด Email provider, สร้างผู้ใช้ nopanat.aplus@gmail.com และ UUID ตรงกับที่กำหนด`;
+  return `${error.message} | ตรวจสอบว่าเปิด Email provider และสร้างผู้ใช้ผู้ดูแลด้วยอีเมล ${PRIMARY_ADMIN_EMAIL}`;
 }
 
 export default function AdminDashboard() {

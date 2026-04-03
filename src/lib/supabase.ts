@@ -2,7 +2,6 @@ import { createClient, type User } from '@supabase/supabase-js';
 import { compressImage } from './imageCompression';
 
 export const PRIMARY_ADMIN_EMAIL = 'nopanat.aplus@gmail.com';
-export const PRIMARY_ADMIN_UUID = 'e58d7131-8935-4093-b27d-042ab1e8c49d';
 
 export type TicketStatus = 'Pending' | 'Approved' | 'Completed' | 'Rejected';
 
@@ -239,8 +238,5 @@ export function subscribeToAdminAuthState(callback: (user: User | null) => void)
 }
 
 export function isPrimaryAdmin(user: Pick<User, 'id' | 'email'> | null) {
-  return (
-    user?.id === PRIMARY_ADMIN_UUID ||
-    user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL
-  );
+  return user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
 }
