@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Swal from 'sweetalert2';
 import { createTicket, isSupabaseConfigured, uploadImages } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -152,7 +153,10 @@ export default function Home() {
       )}
 
       <div className="bg-gradient-to-r from-teal-700 to-blue-600 text-white pt-10 pb-8 px-6 rounded-b-[2rem] shadow-lg max-w-2xl mx-auto relative">
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <Link href="/admin" className="text-xs bg-white/20 px-3 py-1.5 rounded-lg font-bold hover:bg-white/30 transition border border-white/10 flex items-center gap-1.5">
+            📊 <span className="hidden sm:inline">Dashboard</span>
+          </Link>
           <LanguageSwitcher />
         </div>
         <h1 className="text-2xl font-bold mb-2">{t('ระบบนวัตกรรม (Hyeok-sin)', 'Hyeok-sin Innovation System')}</h1>

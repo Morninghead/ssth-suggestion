@@ -274,3 +274,87 @@ export function subscribeToAdminAuthState(callback: (user: User | null) => void)
 export function isPrimaryAdmin(user: Pick<User, 'id' | 'email'> | null) {
   return user?.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL;
 }
+
+export type AdminProfile = {
+  id: string;
+  email: string;
+  fullName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+};
+
+export async function getAdminProfile(userId: string): Promise<AdminProfile | null> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('admin_profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    email: data.email,
+    fullName: data.full_name,
+    status: data.status,
+    createdAt: data.created_at,
+  };
+}
+
+export async function createAdminProfile(profile: { id: string; email: string; fullName: string }) {
+  const client = requireSupabase();
+  const { error } = await client.from('admin_profiles').insert({
+    id: profile.id,
+    email: profile.email,
+    full_name: profile.fullName,
+    status: 'pending',
+  });
+
+  if (error) throw error;
+}
+
+export async function fetchAdminProfiles(): Promise<AdminProfile[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('admin_profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map(row => ({
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    status: row.status,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function updateAdminProfileStatus(userId: string, status: 'approved' | 'rejected') {
+  const client = requireSupabase();
+  const { error } = await client
+    .from('admin_profiles')
+    .update({ status })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+export async function signInWithGoogle() {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo:
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/admin`
+          : undefined,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}

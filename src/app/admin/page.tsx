@@ -9,17 +9,23 @@ import type { User } from '@supabase/supabase-js';
 import {
   fetchTickets,
   getCurrentAdminUser,
+  getAdminProfile,
+  createAdminProfile,
+  fetchAdminProfiles,
+  updateAdminProfileStatus,
   isSupabaseConfigured,
   isPrimaryAdmin,
   PRIMARY_ADMIN_EMAIL,
   requestAdminPasswordReset,
   signInAdmin,
+  signInWithGoogle,
   signOutAdmin,
   subscribeToAdminAuthState,
   TicketRecord,
   TicketStatus,
   updateTicket,
   uploadImages,
+  AdminProfile,
 } from '../../lib/supabase';
 
 function getAdminLoginMessage(error: unknown, t: (th: string, en: string) => string) {
@@ -121,6 +127,12 @@ export default function AdminDashboard() {
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
   const [filter, setFilter] = useState<TicketStatus | 'All'>('Pending');
   
+  // Profile system
+  const [authProfile, setAuthProfile] = useState<AdminProfile | null>(null);
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [allProfiles, setAllProfiles] = useState<AdminProfile[]>([]);
+  const [showAdminMgmt, setShowAdminMgmt] = useState(false);
+
   // Selection for edit
   const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
   const [updateStatus, setUpdateStatus] = useState<TicketStatus>('Pending');
@@ -139,46 +151,59 @@ export default function AdminDashboard() {
       try {
         const user = await getCurrentAdminUser();
         if (!cancelled) {
-          const allowedUser = isPrimaryAdmin(user) ? user : null;
-          setAuthUser(allowedUser);
-          setAuthLoading(false);
-          if (allowedUser) {
-            const data = await fetchTickets();
-            if (!cancelled) {
-              setTickets(data);
+          setAuthUser(user);
+          
+          if (user) {
+            const profile = await getAdminProfile(user.id);
+            setAuthProfile(profile);
+
+            const isAllowed = isPrimaryAdmin(user) || profile?.status === 'approved';
+            
+            if (isAllowed) {
+              const data = await fetchTickets();
+              if (!cancelled) setTickets(data);
+              
+              if (isPrimaryAdmin(user)) {
+                const profiles = await fetchAdminProfiles();
+                setAllProfiles(profiles);
+              }
             }
           }
+          setAuthLoading(false);
         }
       } catch (error) {
         console.error(error);
-        if (!cancelled) {
-          setAuthLoading(false);
-        }
+        if (!cancelled) setAuthLoading(false);
       }
     }
 
     void restoreSession();
 
     const { data: subscription } = subscribeToAdminAuthState(async (user) => {
-      if (!isPrimaryAdmin(user)) {
-        setAuthUser(null);
-        setTickets([]);
-        setSelectedTicket(null);
-        return;
-      }
-
       setAuthUser(user);
 
       if (!user) {
+        setAuthProfile(null);
         setTickets([]);
+        setAllProfiles([]);
         setSelectedTicket(null);
         return;
       }
 
       try {
-        const data = await fetchTickets();
-        if (!cancelled) {
-          setTickets(data);
+        const profile = await getAdminProfile(user.id);
+        setAuthProfile(profile);
+
+        const isAllowed = isPrimaryAdmin(user) || profile?.status === 'approved';
+
+        if (isAllowed) {
+          const data = await fetchTickets();
+          if (!cancelled) setTickets(data);
+
+          if (isPrimaryAdmin(user)) {
+            const profiles = await fetchAdminProfiles();
+            setAllProfiles(profiles);
+          }
         }
       } catch (error) {
         console.error(error);
@@ -195,13 +220,25 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       const user = await signInAdmin(email, password);
-      if (!isPrimaryAdmin(user)) {
-        await signOutAdmin();
-        throw new Error(t(`บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ ใช้อีเมล ${PRIMARY_ADMIN_EMAIL} เท่านั้น`, `No admin privileges. Use ${PRIMARY_ADMIN_EMAIL} only.`));
+      
+      const profile = await getAdminProfile(user.id);
+      setAuthProfile(profile);
+
+      const isAllowed = isPrimaryAdmin(user) || profile?.status === 'approved';
+      if (!isAllowed && profile?.status !== 'pending' && profile?.status !== 'rejected') {
+        // No profile yet, but could be an admin using email/password
+        // If it's the primary admin, it's fine. If not, they need a profile.
+        if (!isPrimaryAdmin(user)) {
+          await signOutAdmin();
+          throw new Error(t(`บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ`, `No admin privileges.`));
+        }
       }
 
-      const data = await fetchTickets();
-      setTickets(data);
+      if (isAllowed) {
+        const data = await fetchTickets();
+        setTickets(data);
+      }
+      
       setEmail('');
       setPassword('');
     } catch (e: unknown) {
@@ -214,9 +251,60 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleRequestAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authUser) return;
+    const fullName = (e.target as any).fullName.value;
+    if (!fullName) return;
+
+    setRequestingAccess(true);
+    try {
+      await createAdminProfile({
+        id: authUser.id,
+        email: authUser.email!,
+        fullName,
+      });
+      const profile = await getAdminProfile(authUser.id);
+      setAuthProfile(profile);
+      Swal.fire({
+        icon: 'success',
+        title: t('ส่งคำขอสำเร็จ', 'Request Sent'),
+        text: t('กรุณารอผู้ดูแลระบบตรวจสอบและอนุมัติสิทธิ์', 'Please wait for the administrator to review and approve your access.'),
+      });
+    } catch (error) {
+      Swal.fire({ icon: 'error', title: 'Error', text: error instanceof Error ? error.message : 'Unknown error' });
+    } finally {
+      setRequestingAccess(false);
+    }
+  };
+
+  const handleUpdateProfileStatus = async (userId: string, status: 'approved' | 'rejected') => {
+    try {
+      await updateAdminProfileStatus(userId, status);
+      const profiles = await fetchAdminProfiles();
+      setAllProfiles(profiles);
+      Swal.fire({ icon: 'success', title: 'Success', timer: 1500 });
+    } catch (error) {
+      Swal.fire({ icon: 'error', title: 'Error', text: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  };
+
   const handleLogout = async () => {
     await signOutAdmin();
     setSelectedTicket(null);
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (e: unknown) {
+      Swal.fire({
+        icon: 'error',
+        title: t('เข้าสู่ระบบไม่สำเร็จ', 'Login Failed'),
+        text: e instanceof Error ? e.message : t('เกิดข้อผิดพลาด', 'An error occurred'),
+        footer: `Admin email: ${PRIMARY_ADMIN_EMAIL}`,
+      });
+    }
   };
 
   const handleForgotPassword = async () => {
@@ -375,17 +463,11 @@ export default function AdminDashboard() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border top-0 border-slate-100">
           <div className="text-5xl mb-4">🛡️</div>
-          <h1 className="text-xl font-bold text-teal-700 mb-6">{t('กรุณาเข้าสู่ระบบ', 'Please Login')}</h1>
-          <p className="mb-4 text-sm leading-relaxed text-slate-500">
-            {t('เข้าสู่ระบบด้วยบัญชีผู้ดูแลที่สร้างไว้ใน Supabase Auth', 'Login with an admin account created in Supabase Auth')}
-          </p>
-          <p className="mb-4 text-[11px] leading-relaxed text-slate-400">
-            {t('ถ้า login ไม่ผ่าน ให้ตรวจสอบว่าเปิด Email provider แล้ว, สร้างผู้ใช้ผู้ดูแลแล้ว, และหากเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน', 'If login fails, check if Email provider is enabled, admin user is created, and if Confirm email is required, confirm it first.')}
-          </p>
+          <h1 className="text-xl font-bold text-teal-700 mb-6">{t('กรุณาเข้าสู่ระบบ', 'Admin Login')}</h1>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
-              placeholder={t('อีเมลผู้ดูแล', 'Admin Email')}
+              placeholder={t('อีเมลผู้ดูแล', 'Email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
@@ -401,6 +483,27 @@ export default function AdminDashboard() {
             />
             <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">{t('เข้าสู่ระบบ', 'Login')}</button>
           </form>
+
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex-1 border-t border-slate-200" />
+            <span className="text-xs text-slate-400">{t('หรือ', 'or')}</span>
+            <div className="flex-1 border-t border-slate-200" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="mt-3 w-full flex items-center justify-center gap-3 bg-white border border-slate-300 text-slate-700 font-semibold p-3 rounded-xl transition hover:bg-slate-50 shadow-sm"
+          >
+            <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+            </svg>
+            {t('เข้าสู่ระบบด้วย Google', 'Sign in with Google')}
+          </button>
+
           <div className="mt-4 space-y-2 text-center">
             <button
               type="button"
@@ -420,6 +523,62 @@ export default function AdminDashboard() {
         </div>
       </div>
     );
+  }
+
+  // Check Profile Status
+  const isMaster = isPrimaryAdmin(authUser);
+  const isApproved = authProfile?.status === 'approved' || isMaster;
+
+  if (!isApproved) {
+    if (!authProfile) {
+      // Show Request Access Form
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border border-slate-100">
+            <div className="text-5xl mb-4">📋</div>
+            <h1 className="text-xl font-bold text-teal-700 mb-6">{t('กรอกชื่อเพื่อขอสิทธิ์', 'Request Access')}</h1>
+            <p className="mb-6 text-sm text-slate-500">{t('ระบุชื่อ-นามสกุลของคุณเพื่อให้ผู้ดูแลระบบตรวจสอบและยืนยันตัวตนพนักงาน', 'Provide your full name so the administrator can verify your identity.')}</p>
+            <form onSubmit={handleRequestAccess} className="space-y-4">
+              <input name="fullName" type="text" placeholder={t('ชื่อ - นามสกุล', 'Full Name')} className="w-full rounded-xl border border-slate-300 p-3 outline-none focus:ring-2 focus:ring-teal-500" required />
+              <button disabled={requestingAccess} type="submit" className="w-full bg-teal-600 text-white font-bold p-3 rounded-xl hover:bg-teal-700 transition disabled:bg-slate-300">
+                {requestingAccess ? t('กำลังส่ง...', 'Sending...') : t('ส่งคำขอเข้าใช้งาน', 'Send Request')}
+              </button>
+            </form>
+            <button onClick={() => signOutAdmin()} className="mt-4 text-xs text-slate-400 hover:text-slate-600 underline">{t('ยกเลิก', 'Cancel')}</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (authProfile.status === 'pending') {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border border-slate-100">
+            <div className="text-5xl mb-4">⏳</div>
+            <h1 className="text-xl font-bold text-amber-600 mb-6">{t('รอกำลังอนุมัติ', 'Approval Pending')}</h1>
+            <p className="mb-4 text-sm text-slate-500">{t('คุณได้ส่งคำขอเข้าใช้งานแล้ว กรุณารอผู้ดูแลตรวจสอบสิทธิ์', 'You have sent an access request. Please wait for authorization.')}</p>
+            <div className="bg-slate-50 p-4 rounded-xl text-left border mb-6">
+              <p className="text-[10px] uppercase font-bold text-slate-400">ชื่อที่ลงทะเบียน</p>
+              <p className="font-bold text-slate-700">{authProfile.fullName}</p>
+            </div>
+            <button onClick={() => signOutAdmin()} className="w-full bg-slate-100 text-slate-600 font-bold p-3 rounded-xl hover:bg-slate-200 transition">{t('ออกจากระบบ', 'Sign Out')}</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (authProfile.status === 'rejected') {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border border-rose-100">
+            <div className="text-5xl mb-4">🚫</div>
+            <h1 className="text-xl font-bold text-rose-600 mb-6">{t('ถูกปฏิเสธการเข้าถึง', 'Access Denied')}</h1>
+            <p className="mb-6 text-sm text-slate-500">{t('ใบคำขอของคุณไม่ได้รับอนุมัติ หากมีข้อสงสัยกรุณาติดต่อผู้ดูแลระบบ', 'Your request has not been approved. If you have questions, please contact the administrator.')}</p>
+            <button onClick={() => signOutAdmin()} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl transition">{t('ตกลง', 'Okay')}</button>
+          </div>
+        </div>
+      );
+    }
   }
 
   if (selectedTicket) {
@@ -568,11 +727,68 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-center w-full"><h1 className="text-2xl font-bold">Hyeok-sin Admin</h1><LanguageSwitcher /></div>
           <p className="text-sm opacity-90">{t('ระบบภาพรวมนวัตกรรม', 'Innovation Overview System')}</p>
         </div>
-        <button onClick={handleLogout} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">{t('ออกจากระบบ', 'Sign Out')}</button>
+        <div className="flex items-center gap-2">
+          {isMaster && (
+            <button onClick={() => setShowAdminMgmt(!showAdminMgmt)} className={`text-sm px-4 py-2 rounded-xl font-bold transition ${showAdminMgmt ? 'bg-white text-teal-700' : 'bg-white/20 hover:bg-white/30'}`}>
+              {showAdminMgmt ? t('ดูงาน', 'View Tickets') : t('จัดการสิทธิ์', 'Manage Admins')}
+              {allProfiles.some(p => p.status === 'pending') && !showAdminMgmt && <span className="ml-2 w-2 h-2 bg-rose-500 rounded-full inline-block animate-pulse"></span>}
+            </button>
+          )}
+          <button onClick={handleLogout} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">{t('ออกจากระบบ', 'Sign Out')}</button>
+        </div>
       </div>
 
       <div className="max-w-5xl mx-auto p-4 mt-4">
-        <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {showAdminMgmt && isMaster ? (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border space-y-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">👥 {t('จัดการสิทธิ์ผู้ใช้งาน', 'Admin Management')}</h2>
+              <p className="text-sm text-slate-500">{t('ตรวจสอบและอนุมัติรายชื่อพนักงานที่ขอเข้าใช้งานระบบหลังบ้าน', 'Review and approve employees requesting admin access.')}</p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="border-b-2 text-slate-500">
+                    <th className="pb-3 px-2">{t('ชื่อ - นามสกุล', 'Full Name')}</th>
+                    <th className="pb-3 px-2">Email</th>
+                    <th className="pb-3 px-2">{t('วันที่ขอ', 'Date')}</th>
+                    <th className="pb-3 px-2">{t('สถานะ', 'Status')}</th>
+                    <th className="pb-3 px-2 text-right">{t('จัดการ', 'Actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allProfiles.filter(p => !isPrimaryAdmin(p)).map(profile => (
+                    <tr key={profile.id} className="border-b hover:bg-slate-50">
+                      <td className="py-4 px-2 font-bold text-slate-700">{profile.fullName}</td>
+                      <td className="py-4 px-2 text-slate-500">{profile.email}</td>
+                      <td className="py-4 px-2 text-slate-400">{formatTicketDate(profile.createdAt)}</td>
+                      <td className="py-4 px-2">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                          profile.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                          profile.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                        }`}>{profile.status}</span>
+                      </td>
+                      <td className="py-4 px-2 text-right space-x-2">
+                        {profile.status !== 'approved' && (
+                          <button onClick={() => handleUpdateProfileStatus(profile.id, 'approved')} className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700 transition">{t('อนุมัติ', 'Approve')}</button>
+                        )}
+                        {profile.status !== 'rejected' && (
+                          <button onClick={() => handleUpdateProfileStatus(profile.id, 'rejected')} className="bg-rose-100 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-rose-200 transition">{t('ปฏิเสธ', 'Reject')}</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {allProfiles.length <= 1 && (
+                    <tr><td colSpan={5} className="py-10 text-center text-slate-400">{t('ยังไม่มีคำขอเข้าใช้งาน', 'No requests found')}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-teal-700">{t('ข้อเสนอทั้งหมด', 'Total Suggestions')}</p>
             <p className="mt-2 text-3xl font-bold text-slate-800">{totalTickets}</p>
@@ -786,12 +1002,14 @@ export default function AdminDashboard() {
                   </tr>
                 ))}
                 {filteredTickets.length === 0 && (
-                  <tr><td colSpan={6} className="py-8 text-center text-slate-400">{t('ไม่พบรายการข้อมูล', 'No data found')}</td></tr>
+                  <tr><td colSpan={6} className="py-10 text-center text-slate-400">{t('ไม่พบรายการที่ตรงตามเงื่อนไข', 'No matching records found')}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
