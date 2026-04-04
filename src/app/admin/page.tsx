@@ -87,7 +87,7 @@ function getStatusMeta(status: TicketStatus, t: (th: string, en: string) => stri
   }
 }
 
-function buildRankings(values: string[], total: number) {
+function buildRankings(values: string[], total: number, t: (th: string, en: string) => string) {
   const counts = new Map<string, number>();
 
   values.forEach((value) => {
@@ -320,10 +320,12 @@ export default function AdminDashboard() {
       return ticket.department;
     }),
     totalTickets,
+    t,
   );
   const suggestionTypeRanking = buildRankings(
     tickets.map((ticket) => ticket.suggestionType),
     totalTickets,
+    t,
   );
   const topDepartment = departmentRanking[0]?.label || '-';
 
