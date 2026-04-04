@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import Swal from 'sweetalert2';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
@@ -20,59 +22,59 @@ import {
   uploadImages,
 } from '../../lib/supabase';
 
-function getAdminLoginMessage(error: unknown) {
+function getAdminLoginMessage(error: unknown, t: (th: string, en: string) => string) {
   if (!(error instanceof Error)) {
-    return 'กรุณาตรวจสอบอีเมล รหัสผ่าน และสถานะผู้ใช้ใน Supabase Auth';
+    return t('กรุณาตรวจสอบอีเมล รหัสผ่าน และสถานะผู้ใช้ใน Supabase Auth', 'Please check email, password, and user status in Supabase Auth');
   }
 
   const message = error.message.toLowerCase();
 
   if (message.includes('invalid login credentials')) {
-    return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือผู้ใช้นี้ยังไม่ได้ถูกสร้างใน Supabase Auth';
+    return t('อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือผู้ใช้นี้ยังไม่ได้ถูกสร้างใน Supabase Auth', 'Invalid email or password, or user not created in Supabase Auth');
   }
 
   if (message.includes('email logins are disabled') || message.includes('unsupported grant type')) {
-    return 'ใน Supabase ยังไม่ได้เปิด Email provider กรุณาไปที่ Authentication > Sign In / Providers แล้วเปิด Email';
+    return t('ใน Supabase ยังไม่ได้เปิด Email provider กรุณาไปที่ Authentication > Sign In / Providers แล้วเปิด Email', 'Email provider is not enabled in Supabase. Go to Authentication > Sign In / Providers and enable Email.');
   }
 
   if (message.includes('email not confirmed')) {
-    return 'บัญชีนี้ยังไม่ยืนยันอีเมล กรุณายืนยันอีเมลใน Supabase หรือปิด email confirmation ชั่วคราว';
+    return t('บัญชีนี้ยังไม่ยืนยันอีเมล กรุณายืนยันอีเมลใน Supabase หรือปิด email confirmation ชั่วคราว', 'Email not confirmed. Please confirm email in Supabase or temporarily disable email confirmation.');
   }
 
   if (message.includes('email rate limit exceeded')) {
-    return 'มีการลองเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่';
+    return t('มีการลองเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่', 'Too many login attempts. Please try again later.');
   }
 
-  if (message.includes('ไม่มีสิทธิ์ผู้ดูแลระบบ')) {
+  if (message.includes('ไม่มีสิทธิ์ผู้ดูแลระบบ') || message.includes('No admin privileges')) {
     return error.message;
   }
 
-  return `${error.message} | ตรวจสอบว่าเปิด Email provider และสร้างผู้ใช้ผู้ดูแลด้วยอีเมล ${PRIMARY_ADMIN_EMAIL}`;
+  return `${error.message} | ${t('ตรวจสอบว่าเปิด Email provider และสร้างผู้ใช้ผู้ดูแลด้วยอีเมล', 'Make sure Email provider is enabled and admin user is created with email')} ${PRIMARY_ADMIN_EMAIL}`;
 }
 
-function getStatusMeta(status: TicketStatus) {
+function getStatusMeta(status: TicketStatus, t: (th: string, en: string) => string) {
   switch (status) {
     case 'Pending':
       return {
-        label: 'รอดำเนินการ',
+        label: t('รอดำเนินการ', 'Pending'),
         badgeClass: 'bg-amber-100 text-amber-700',
         cardClass: 'from-amber-50 to-white border-amber-200',
       };
     case 'Approved':
       return {
-        label: 'กำลังทำ',
+        label: t('กำลังทำ', 'In Progress'),
         badgeClass: 'bg-sky-100 text-sky-700',
         cardClass: 'from-sky-50 to-white border-sky-200',
       };
     case 'Completed':
       return {
-        label: 'เสร็จสิ้น',
+        label: t('เสร็จสิ้น', 'Completed'),
         badgeClass: 'bg-emerald-100 text-emerald-700',
         cardClass: 'from-emerald-50 to-white border-emerald-200',
       };
     case 'Rejected':
       return {
-        label: 'ไม่ผ่าน',
+        label: t('ไม่ผ่าน', 'Rejected'),
         badgeClass: 'bg-rose-100 text-rose-700',
         cardClass: 'from-rose-50 to-white border-rose-200',
       };
@@ -89,7 +91,7 @@ function buildRankings(values: string[], total: number) {
   const counts = new Map<string, number>();
 
   values.forEach((value) => {
-    const key = value?.trim() || 'ไม่ระบุ';
+    const key = value?.trim() || t('ไม่ระบุ', 'Unknown');
     counts.set(key, (counts.get(key) || 0) + 1);
   });
 
@@ -110,6 +112,7 @@ function formatTicketDate(value: string) {
 }
 
 export default function AdminDashboard() {
+  const { t } = useLanguage();
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [email, setEmail] = useState('');
@@ -194,7 +197,7 @@ export default function AdminDashboard() {
       const user = await signInAdmin(email, password);
       if (!isPrimaryAdmin(user)) {
         await signOutAdmin();
-        throw new Error(`บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ ใช้อีเมล ${PRIMARY_ADMIN_EMAIL} เท่านั้น`);
+        throw new Error(t(`บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ ใช้อีเมล ${PRIMARY_ADMIN_EMAIL} เท่านั้น`, `No admin privileges. Use ${PRIMARY_ADMIN_EMAIL} only.`));
       }
 
       const data = await fetchTickets();
@@ -204,8 +207,8 @@ export default function AdminDashboard() {
     } catch (e: unknown) {
       Swal.fire({
         icon: 'error',
-        title: 'เข้าสู่ระบบไม่สำเร็จ',
-        text: getAdminLoginMessage(e),
+        title: t('เข้าสู่ระบบไม่สำเร็จ', 'Login Failed'),
+        text: getAdminLoginMessage(e, t),
         footer: `Admin email: ${PRIMARY_ADMIN_EMAIL}`,
       });
     }
@@ -228,14 +231,14 @@ export default function AdminDashboard() {
       await requestAdminPasswordReset(PRIMARY_ADMIN_EMAIL, redirectTo);
       await Swal.fire({
         icon: 'success',
-        title: 'ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว',
-        text: `กรุณาตรวจสอบอีเมล ${PRIMARY_ADMIN_EMAIL} แล้วเปิดลิงก์เพื่อกำหนดรหัสผ่านใหม่`,
+        title: t('ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว', 'Password Reset Link Sent'),
+        text: t(`กรุณาตรวจสอบอีเมล ${PRIMARY_ADMIN_EMAIL} แล้วเปิดลิงก์เพื่อกำหนดรหัสผ่านใหม่`, `Please check your email ${PRIMARY_ADMIN_EMAIL} and open the link to set a new password`),
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? getAdminLoginMessage(error) : 'ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้';
+      const message = error instanceof Error ? getAdminLoginMessage(error, t) : t('ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้', 'Unable to send password reset link');
       await Swal.fire({
         icon: 'error',
-        title: 'ส่งลิงก์ไม่สำเร็จ',
+        title: t('ส่งลิงก์ไม่สำเร็จ', 'Failed to Send Link'),
         text: message,
       });
     } finally {
@@ -247,7 +250,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!selectedTicket || !authUser) return;
 
-    Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+    Swal.fire({ title: t('กำลังบันทึก...', 'Saving...'), allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
     try {
       // 1. Upload new after images if any
@@ -266,15 +269,15 @@ export default function AdminDashboard() {
         afterImages: combinedAfterImages,
       });
 
-      Swal.fire({ icon: 'success', title: 'อัปเดตงานสำเร็จ', text: 'บันทึกข้อมูลเรียบร้อยแล้ว' });
+      Swal.fire({ icon: 'success', title: t('อัปเดตงานสำเร็จ', 'Update Successful'), text: t('บันทึกข้อมูลเรียบร้อยแล้ว', 'Data saved successfully') });
       setSelectedTicket(null);
       setNewAfterImages([]);
       
       const data = await fetchTickets();
       setTickets(data);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'ไม่สามารถบันทึกข้อมูลได้';
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: message });
+      const message = e instanceof Error ? e.message : t('ไม่สามารถบันทึกข้อมูลได้', 'Unable to save data');
+      Swal.fire({ icon: 'error', title: t('เกิดข้อผิดพลาด', 'Error Occurred'), text: message });
     }
   };
 
@@ -346,7 +349,7 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="rounded-3xl bg-white px-6 py-8 shadow-xl border border-slate-100 text-slate-500">
-          กำลังตรวจสอบสิทธิ์...
+          {t('กำลังตรวจสอบสิทธิ์...', 'Checking permissions...')}
         </div>
       </div>
     );
@@ -356,10 +359,9 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-lg rounded-3xl border border-amber-300 bg-white p-8 text-center shadow-xl">
-          <h1 className="mb-4 text-2xl font-bold text-amber-700">Supabase ยังไม่ถูกตั้งค่า</h1>
+          <h1 className="mb-4 text-2xl font-bold text-amber-700">{t('Supabase ยังไม่ถูกตั้งค่า', 'Supabase is not configured')}</h1>
           <p className="text-sm leading-relaxed text-slate-600">
-            เพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ใน `.env.local`
-            จากนั้นสร้างตารางและ bucket ตามไฟล์ `supabase/setup.sql`
+            {t('เพิ่ม `NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ใน `.env.local` จากนั้นสร้างตารางและ bucket ตามไฟล์ `supabase/setup.sql`', 'Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local`, then create the table and bucket according to `supabase/setup.sql`')}
           </p>
         </div>
       </div>
@@ -371,18 +373,17 @@ export default function AdminDashboard() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border top-0 border-slate-100">
           <div className="text-5xl mb-4">🛡️</div>
-          <h1 className="text-xl font-bold text-teal-700 mb-6">กรุณาเข้าสู่ระบบ</h1>
+          <h1 className="text-xl font-bold text-teal-700 mb-6">{t('กรุณาเข้าสู่ระบบ', 'Please Login')}</h1>
           <p className="mb-4 text-sm leading-relaxed text-slate-500">
-            เข้าสู่ระบบด้วยบัญชีผู้ดูแลที่สร้างไว้ใน Supabase Auth
+            {t('เข้าสู่ระบบด้วยบัญชีผู้ดูแลที่สร้างไว้ใน Supabase Auth', 'Login with an admin account created in Supabase Auth')}
           </p>
           <p className="mb-4 text-[11px] leading-relaxed text-slate-400">
-            ถ้า login ไม่ผ่าน ให้ตรวจสอบว่าเปิด Email provider แล้ว, สร้างผู้ใช้ผู้ดูแลแล้ว,
-            และหากเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน
+            {t('ถ้า login ไม่ผ่าน ให้ตรวจสอบว่าเปิด Email provider แล้ว, สร้างผู้ใช้ผู้ดูแลแล้ว, และหากเปิด Confirm email อยู่ต้องยืนยันอีเมลก่อน', 'If login fails, check if Email provider is enabled, admin user is created, and if Confirm email is required, confirm it first.')}
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <input
               type="email"
-              placeholder="อีเมลผู้ดูแล"
+              placeholder={t('อีเมลผู้ดูแล', 'Admin Email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
@@ -390,13 +391,13 @@ export default function AdminDashboard() {
             />
             <input
               type="password"
-              placeholder="รหัสผ่าน"
+              placeholder={t('รหัสผ่าน', 'Password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
               required
             />
-            <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">เข้าสู่ระบบ</button>
+            <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">{t('เข้าสู่ระบบ', 'Login')}</button>
           </form>
           <div className="mt-4 space-y-2 text-center">
             <button
@@ -405,13 +406,13 @@ export default function AdminDashboard() {
               disabled={resetLoading}
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-800 disabled:cursor-not-allowed disabled:text-slate-400"
             >
-              {resetLoading ? 'กำลังส่งลิงก์...' : 'ลืมรหัสผ่าน?'}
+              {resetLoading ? t('กำลังส่งลิงก์...', 'Sending link...') : t('ลืมรหัสผ่าน?', 'Forgot Password?')}
             </button>
             <p className="text-[11px] text-slate-400">
-              หากเปิดอีเมลจากลิงก์ reset แล้วเด้งกลับหน้าแรก ระบบจะพาไปหน้าเปลี่ยนรหัสผ่านให้อัตโนมัติ
+              {t('หากเปิดอีเมลจากลิงก์ reset แล้วเด้งกลับหน้าแรก ระบบจะพาไปหน้าเปลี่ยนรหัสผ่านให้อัตโนมัติ', 'If you open the email from the reset link and it redirects to the home page, the system will automatically take you to the password reset page.')}
             </p>
             <p className="text-[11px] text-slate-400">
-              หรือเปิดตรงที่ <Link href="/reset-password" className="font-semibold text-teal-700 hover:text-teal-800">หน้าเปลี่ยนรหัสผ่าน</Link>
+              {t('หรือเปิดตรงที่', 'Or open')} <Link href="/reset-password" className="font-semibold text-teal-700 hover:text-teal-800">{t('หน้าเปลี่ยนรหัสผ่าน', 'Password Reset Page')}</Link>
             </p>
           </div>
         </div>
@@ -425,33 +426,33 @@ export default function AdminDashboard() {
         <div className="bg-gradient-to-r from-teal-700 to-teal-500 text-white p-6 rounded-b-[2rem] shadow-md flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">Hyeok-sin Admin</h1>
-            <p className="text-xs opacity-90">จัดการรายละเอียดงาน (Edit)</p>
+            <p className="text-xs opacity-90">{t('จัดการรายละเอียดงาน (Edit)', 'Manage Task Details (Edit)')}</p>
           </div>
-          <button onClick={() => setSelectedTicket(null)} className="text-xs bg-white/20 px-3 py-2 rounded-lg font-bold">กลับ</button>
+          <button onClick={() => setSelectedTicket(null)} className="text-xs bg-white/20 px-3 py-2 rounded-lg font-bold">{t('กลับ', 'Back')}</button>
         </div>
 
         <div className="max-w-3xl mx-auto p-4 space-y-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-teal-700 mb-4 border-b pb-2">📌 รายละเอียดนวัตกรรม (Before)</h2>
+            <h2 className="text-lg font-bold text-teal-700 mb-4 border-b pb-2">📌 {t('รายละเอียดนวัตกรรม (Before)', 'Innovation Details (Before)')}</h2>
             <div className="grid gap-3 text-sm md:grid-cols-2">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <span className="text-slate-500 font-bold block mb-1">Ticket ID</span>
                 <div className="font-medium text-slate-800">{selectedTicket.ticketId}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-bold block mb-1">สถานะปัจจุบัน</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('สถานะปัจจุบัน', 'Current Status')}</span>
                 <div>
-                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(selectedTicket.status).badgeClass}`}>
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(selectedTicket.status, t).badgeClass}`}>
                     {selectedTicket.status}
                   </span>
                 </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-bold block mb-1">ผู้ส่ง</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('ผู้ส่ง', 'Sender')}</span>
                 <div className="text-slate-800">{selectedTicket.fullName}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-bold block mb-1">แผนก</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('แผนก', 'Department')}</span>
                 <div className="text-slate-800">
                   {selectedTicket.department === 'อื่นๆ' && selectedTicket.otherDepartment
                     ? selectedTicket.otherDepartment
@@ -459,85 +460,85 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-bold block mb-1">ปัญหาที่พบ</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('ปัญหาที่พบ', 'Problem Found')}</span>
                 <div className="text-slate-800">{selectedTicket.problem}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-bold block mb-1">การแก้ไข</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('การแก้ไข', 'Solution')}</span>
                 <div className="text-slate-800">{selectedTicket.solution}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 md:col-span-2">
-                <span className="text-slate-500 font-bold block mb-1">รายละเอียด</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('รายละเอียด', 'Details')}</span>
                 <div className="text-slate-800 whitespace-pre-wrap">{selectedTicket.detail}</div>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 md:col-span-2">
-                <span className="text-slate-500 font-bold block mb-1">สาเหตุ</span>
+                <span className="text-slate-500 font-bold block mb-1">{t('สาเหตุ', 'Cause')}</span>
                 <div className="text-slate-800 whitespace-pre-wrap">{selectedTicket.cause}</div>
               </div>
             </div>
             
             <div className="mt-4">
-              <span className="text-slate-500 font-bold block mb-2">รูปภาพ Before</span>
+              <span className="text-slate-500 font-bold block mb-2">{t('รูปภาพ Before', 'Before Images')}</span>
               <div className="flex gap-2 overflow-x-auto">
                 {selectedTicket.beforeImages?.map((url: string, i: number) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" alt={`Before image ${i + 1}`} /></a>
                 ))}
-                {(!selectedTicket.beforeImages || selectedTicket.beforeImages.length === 0) && <span className="text-xs text-slate-400">ไม่มีรูปภาพ</span>}
+                {(!selectedTicket.beforeImages || selectedTicket.beforeImages.length === 0) && <span className="text-xs text-slate-400">{t('ไม่มีรูปภาพ', 'No Image')}</span>}
               </div>
             </div>
 
             <div className="mt-4">
-              <span className="text-slate-500 font-bold block mb-2">รูปภาพ After (ที่มีแล้ว)</span>
+              <span className="text-slate-500 font-bold block mb-2">{t('รูปภาพ After (ที่มีแล้ว)', 'After Images (If any)')}</span>
               <div className="flex gap-2 overflow-x-auto">
                 {selectedTicket.afterImages?.map((url: string, i: number) => (
                   <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} className="w-20 h-20 object-cover rounded-xl border" alt={`After image ${i + 1}`} /></a>
                 ))}
-                {(!selectedTicket.afterImages || selectedTicket.afterImages.length === 0) && <span className="text-xs text-slate-400">ไม่มีรูปภาพ</span>}
+                {(!selectedTicket.afterImages || selectedTicket.afterImages.length === 0) && <span className="text-xs text-slate-400">{t('ไม่มีรูปภาพ', 'No Image')}</span>}
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-teal-700 mb-4 border-b pb-2">✍️ อัปเดตการดำเนินการ</h2>
+            <h2 className="text-lg font-bold text-teal-700 mb-4 border-b pb-2">✍️ {t('อัปเดตการดำเนินการ', 'Update Status')}</h2>
             <form onSubmit={handleUpdate} className="space-y-4 text-sm">
               <div>
-                <label className="block font-bold text-slate-600 mb-1">สถานะ</label>
+                <label className="block font-bold text-slate-600 mb-1">{t('สถานะ', 'Status')}</label>
                 <select
                   value={updateStatus}
                   onChange={e => setUpdateStatus(e.target.value as TicketStatus)}
                   className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 outline-none focus:ring-2 focus:ring-teal-500"
                 >
-                  <option value="Pending">Pending (รอดำเนินการ)</option>
-                  <option value="Approved">Approved (อนุมัติ/กำลังทำ)</option>
-                  <option value="Completed">Completed (เสร็จสิ้น)</option>
-                  <option value="Rejected">Rejected (ไม่ผ่าน)</option>
+                  <option value="Pending">{t('Pending (รอดำเนินการ)', 'Pending')}</option>
+                  <option value="Approved">{t('Approved (อนุมัติ/กำลังทำ)', 'Approved (In Progress)')}</option>
+                  <option value="Completed">{t('Completed (เสร็จสิ้น)', 'Completed')}</option>
+                  <option value="Rejected">{t('Rejected (ไม่ผ่าน)', 'Rejected')}</option>
                 </select>
               </div>
               
               <div>
-                <label className="block font-bold text-slate-600 mb-1">ข้อเสนอแนะจากผู้บริหาร</label>
+                <label className="block font-bold text-slate-600 mb-1">ข้อเสนอแนะ{t('จาก', 'out of')}ผู้บริหาร</label>
                 <textarea
                   rows={3}
                   value={updateFeedback}
                   onChange={e => setUpdateFeedback(e.target.value)}
                   className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="พิมพ์ข้อเสนอแนะ.."
+                  placeholder={t('พิมพ์ข้อเสนอแนะ..', 'Type feedback..')}
                 ></textarea>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-600 mb-1">ข้อมูลหลังการแก้ไข</label>
+                <label className="block font-bold text-slate-600 mb-1">ข้อมูลหลัง{t('การแก้ไข', 'Solution')}</label>
                 <textarea
                   rows={3}
                   value={updateAfterDetail}
                   onChange={e => setUpdateAfterDetail(e.target.value)}
                   className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="ผลลัพธ์ที่ได้.."
+                  placeholder={t('ผลลัพธ์ที่ได้..', 'Result..')}
                 ></textarea>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-600 mb-1">เพิ่มรูปหลังแก้ไข (After Image)</label>
+                <label className="block font-bold text-slate-600 mb-1">{t('เพิ่มรูปหลังแก้ไข (After Image)', 'Add After Image')}</label>
                 <input
                   type="file"
                   multiple
@@ -548,8 +549,8 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setSelectedTicket(null)} className="flex-1 p-3 bg-slate-200 rounded-xl font-bold text-slate-700">ยกเลิก</button>
-                <button type="submit" className="flex-1 p-3 bg-teal-600 rounded-xl font-bold text-white shadow-lg shadow-teal-200">บันทึก</button>
+                <button type="button" onClick={() => setSelectedTicket(null)} className="flex-1 p-3 bg-slate-200 rounded-xl font-bold text-slate-700">{t('ยกเลิก', 'Cancel')}</button>
+                <button type="submit" className="flex-1 p-3 bg-teal-600 rounded-xl font-bold text-white shadow-lg shadow-teal-200">{t('บันทึก', 'Save')}</button>
               </div>
             </form>
           </div>
@@ -562,42 +563,42 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-slate-50">
       <div className="bg-gradient-to-r from-teal-700 to-teal-500 text-white p-6 lg:px-12 rounded-b-[2rem] shadow-md flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Hyeok-sin Admin</h1>
-          <p className="text-sm opacity-90">ระบบภาพรวมนวัตกรรม</p>
+          <div className="flex justify-between items-center w-full"><h1 className="text-2xl font-bold">Hyeok-sin Admin</h1><LanguageSwitcher /></div>
+          <p className="text-sm opacity-90">{t('ระบบภาพรวมนวัตกรรม', 'Innovation Overview System')}</p>
         </div>
-        <button onClick={handleLogout} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">ออกจากระบบ</button>
+        <button onClick={handleLogout} className="text-sm bg-white/20 px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition">{t('ออกจากระบบ', 'Sign Out')}</button>
       </div>
 
       <div className="max-w-5xl mx-auto p-4 mt-4">
         <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-teal-700">ข้อเสนอทั้งหมด</p>
+            <p className="text-sm font-semibold text-teal-700">{t('ข้อเสนอทั้งหมด', 'Total Suggestions')}</p>
             <p className="mt-2 text-3xl font-bold text-slate-800">{totalTickets}</p>
-            <p className="mt-2 text-xs text-slate-500">งานใหม่เดือนนี้ {thisMonthTickets} รายการ</p>
+            <p className="mt-2 text-xs text-slate-500">{t('งานใหม่เดือนนี้', 'New Tasks This Month')} {thisMonthTickets} {t('รายการ', 'Items')}</p>
           </div>
           <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-emerald-700">อัตราปิดงาน</p>
+            <p className="text-sm font-semibold text-emerald-700">{t('อัตราปิดงาน', 'Completion Rate')}</p>
             <p className="mt-2 text-3xl font-bold text-slate-800">{completionRate}%</p>
-            <p className="mt-2 text-xs text-slate-500">เสร็จสิ้นแล้ว {completedTickets} จาก {totalTickets || 0} งาน</p>
+            <p className="mt-2 text-xs text-slate-500">{t('เสร็จสิ้นแล้ว', 'Completed')} {completedTickets} {t('จาก', 'out of')} {totalTickets || 0} {t('งาน', 'tasks')}</p>
           </div>
           <div className="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-sky-700">งานที่มีรูปแนบ</p>
+            <p className="text-sm font-semibold text-sky-700">{t('งานที่มีรูปแนบ', 'Tasks with Images')}</p>
             <p className="mt-2 text-3xl font-bold text-slate-800">{imageCoverage}%</p>
-            <p className="mt-2 text-xs text-slate-500">มีรูปก่อนหรือหลังรวม {ticketsWithImages} รายการ</p>
+            <p className="mt-2 text-xs text-slate-500">{t('มีรูปก่อนหรือหลังรวม', 'Contains before or after images:')} {ticketsWithImages} {t('รายการ', 'Items')}</p>
           </div>
           <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-violet-700">แผนกที่ส่งมากสุด</p>
+            <p className="text-sm font-semibold text-violet-700">{t('แผนกที่ส่งมากสุด', 'Top Sending Dept')}</p>
             <p className="mt-2 text-2xl font-bold text-slate-800">{topDepartment}</p>
-            <p className="mt-2 text-xs text-slate-500">อัตรางานปิดแล้ว {resolvedRate}%</p>
+            <p className="mt-2 text-xs text-slate-500">{t('อัตรางานปิดแล้ว', 'Resolved Rate:')} {resolvedRate}%</p>
           </div>
         </div>
 
         <div className="mb-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">ภาพรวมสถานะงาน</h2>
+              <h2 className="text-lg font-bold text-slate-800">{t('ภาพรวมสถานะงาน', 'Task Status Overview')}</h2>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                อัปเดตจากข้อมูลล่าสุด
+                อัปเดต{t('จาก', 'out of')}ข้อมูล{t('ล่าสุด', 'Latest')}
               </span>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -607,7 +608,7 @@ export default function AdminDashboard() {
                 ['Completed', completedTickets],
                 ['Rejected', rejectedTickets],
               ] as Array<[TicketStatus, number]>).map(([status, count]) => {
-                const meta = getStatusMeta(status);
+                const meta = getStatusMeta(status, t);
                 const width = totalTickets > 0 ? Math.max((count / totalTickets) * 100, count > 0 ? 8 : 0) : 0;
 
                 return (
@@ -628,8 +629,8 @@ export default function AdminDashboard() {
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">แนวโน้ม 6 เดือนล่าสุด</h2>
-              <span className="text-xs font-semibold text-slate-400">จำนวนข้อเสนอ</span>
+              <h2 className="text-lg font-bold text-slate-800">{t('แนวโน้ม 6 เดือนล่าสุด', '6-Month Trend')}</h2>
+              <span className="text-xs font-semibold text-slate-400">{t('จำนวนข้อเสนอ', 'Suggestions')}</span>
             </div>
             <div className="space-y-4">
               {monthlyTrend.map((item) => (
@@ -653,7 +654,7 @@ export default function AdminDashboard() {
         <div className="mb-4 grid gap-4 xl:grid-cols-2">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">รายงานตามแผนก</h2>
+              <h2 className="text-lg font-bold text-slate-800">{t('รายงานตามแผนก', 'Report by Department')}</h2>
               <span className="text-xs font-semibold text-slate-400">Top 6</span>
             </div>
             <div className="space-y-4">
@@ -669,14 +670,14 @@ export default function AdminDashboard() {
                 </div>
               ))}
               {departmentRanking.length === 0 && (
-                <p className="text-sm text-slate-400">ยังไม่มีข้อมูลสำหรับจัดอันดับแผนก</p>
+                <p className="text-sm text-slate-400">{t('ยังไม่มีข้อมูลสำหรับจัดอันดับแผนก', 'No data available for department ranking')}</p>
               )}
             </div>
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">รายงานตามประเภทข้อเสนอ</h2>
+              <h2 className="text-lg font-bold text-slate-800">{t('รายงานตามประเภทข้อเสนอ', 'Report by Suggestion Type')}</h2>
               <span className="text-xs font-semibold text-slate-400">Top 5</span>
             </div>
             <div className="space-y-4">
@@ -692,7 +693,7 @@ export default function AdminDashboard() {
                 </div>
               ))}
               {suggestionTypeRanking.length === 0 && (
-                <p className="text-sm text-slate-400">ยังไม่มีข้อมูลสำหรับจัดอันดับประเภทข้อเสนอ</p>
+                <p className="text-sm text-slate-400">{t('ยังไม่มีข้อมูลสำหรับจัดอันดับประเภทข้อเสนอ', 'No data available for suggestion type ranking')}</p>
               )}
             </div>
           </div>
@@ -701,11 +702,11 @@ export default function AdminDashboard() {
         <div className="mb-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-800">รายงานล่าสุด</h2>
-              <p className="text-sm text-slate-500">รายการใหม่ล่าสุดและสถานะปัจจุบันสำหรับติดตามอย่างรวดเร็ว</p>
+              <h2 className="text-lg font-bold text-slate-800">{t('รายงานล่าสุด', 'Latest Reports')}</h2>
+              <p className="text-sm text-slate-500">{t('รายการใหม่ล่าสุดและสถานะปัจจุบันสำหรับติดตามอย่างรวดเร็ว', 'Latest items and current status for quick tracking')}</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-              ล่าสุด {latestTickets.length} รายการ
+              {t('ล่าสุด', 'Latest')} {latestTickets.length} รายการ
             </span>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
@@ -721,7 +722,7 @@ export default function AdminDashboard() {
                     <p className="font-bold text-slate-800">{ticket.ticketId}</p>
                     <p className="text-sm text-slate-500">{ticket.fullName}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(ticket.status).badgeClass}`}>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusMeta(ticket.status, t).badgeClass}`}>
                     {ticket.status}
                   </span>
                 </div>
@@ -733,7 +734,7 @@ export default function AdminDashboard() {
               </button>
             ))}
             {latestTickets.length === 0 && (
-              <p className="text-sm text-slate-400">ยังไม่มีรายการล่าสุดให้แสดง</p>
+              <p className="text-sm text-slate-400">ยังไม่มีรายการ{t('ล่าสุด', 'Latest')}ให้แสดง</p>
             )}
           </div>
         </div>
@@ -741,15 +742,15 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">📋 รายการตรวจสอบ</h2>
-              <p className="mt-1 text-sm text-slate-500">แสดงผล {filteredTickets.length} จากทั้งหมด {totalTickets} รายการ</p>
+              <h2 className="text-lg font-bold flex items-center gap-2">📋 {t('รายการตรวจสอบ', 'Checklist')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('แสดงผล', 'Showing')} {filteredTickets.length} {t('จาก', 'out of')}{t('ทั้งหมด', 'Total')} {totalTickets} {t('รายการ', 'Items')}</p>
             </div>
             <select value={filter} onChange={e => setFilter(e.target.value as TicketStatus | 'All')} className="border rounded-xl p-2 px-4 outline-none text-sm font-semibold text-slate-700 bg-slate-50">
-              <option value="All">ทั้งหมด</option>
-              <option value="Pending">Pending (รอดำเนินการ)</option>
-              <option value="Approved">Approved (กำลังทำ)</option>
-              <option value="Completed">Completed (เสร็จสิ้น)</option>
-              <option value="Rejected">Rejected (ไม่ผ่าน)</option>
+              <option value="All">{t('ทั้งหมด', 'Total')}</option>
+              <option value="Pending">{t('Pending (รอดำเนินการ)', 'Pending')}</option>
+              <option value="Approved">{t('Approved (กำลังทำ)', 'Approved (In Progress)')}</option>
+              <option value="Completed">{t('Completed (เสร็จสิ้น)', 'Completed')}</option>
+              <option value="Rejected">{t('Rejected (ไม่ผ่าน)', 'Rejected')}</option>
             </select>
           </div>
 
@@ -758,32 +759,32 @@ export default function AdminDashboard() {
               <thead>
                 <tr className="text-slate-500 border-b-2">
                   <th className="pb-3 px-2">Ticket ID</th>
-                  <th className="pb-3 px-2">แผนก</th>
-                  <th className="pb-3 px-2">ผู้ส่ง</th>
-                  <th className="pb-3 px-2">วันที่ส่ง</th>
-                  <th className="pb-3 px-2">สถานะ</th>
-                  <th className="pb-3 px-2">จัดการ</th>
+                  <th className="pb-3 px-2">{t('แผนก', 'Department')}</th>
+                  <th className="pb-3 px-2">{t('ผู้ส่ง', 'Sender')}</th>
+                  <th className="pb-3 px-2">{t('วันที่ส่ง', 'Date')}</th>
+                  <th className="pb-3 px-2">{t('สถานะ', 'Status')}</th>
+                  <th className="pb-3 px-2">{t('จัดการ', 'Manage')}</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTickets.map(t => (
-                  <tr key={t.dbId} className="border-b transition hover:bg-slate-50">
-                    <td className="py-4 px-2 font-bold text-slate-700">{t.ticketId}</td>
+                {filteredTickets.map(ticketItem => (
+                  <tr key={ticketItem.dbId} className="border-b transition hover:bg-slate-50">
+                    <td className="py-4 px-2 font-bold text-slate-700">{ticketItem.ticketId}</td>
                     <td className="py-4 px-2 text-slate-600">
-                      {(t.department === 'อื่นๆ' && t.otherDepartment) || t.department}
+                      {(ticketItem.department === 'อื่นๆ' && ticketItem.otherDepartment) || ticketItem.department}
                     </td>
-                    <td className="py-4 px-2 text-slate-600">{t.fullName}</td>
-                    <td className="py-4 px-2 text-slate-500">{formatTicketDate(t.createdAt)}</td>
+                    <td className="py-4 px-2 text-slate-600">{ticketItem.fullName}</td>
+                    <td className="py-4 px-2 text-slate-500">{formatTicketDate(ticketItem.createdAt)}</td>
                     <td className="py-4 px-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusMeta(t.status).badgeClass}`}>{t.status}</span>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusMeta(ticketItem.status, t).badgeClass}`}>{getStatusMeta(ticketItem.status, t).label}</span>
                     </td>
                     <td className="py-4 px-2">
-                      <button onClick={() => openTicket(t)} className="bg-teal-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-teal-700">ดู/แก้ไข</button>
+                      <button onClick={() => openTicket(ticketItem)} className="bg-teal-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-sm hover:bg-teal-700">{t('ดู/แก้ไข', 'View/Edit')}</button>
                     </td>
                   </tr>
                 ))}
                 {filteredTickets.length === 0 && (
-                  <tr><td colSpan={6} className="py-8 text-center text-slate-400">ไม่พบรายการข้อมูล</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-slate-400">{t('ไม่พบรายการข้อมูล', 'No data found')}</td></tr>
                 )}
               </tbody>
             </table>

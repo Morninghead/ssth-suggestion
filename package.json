@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "admin:set-password": "node scripts/set-admin-password.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
