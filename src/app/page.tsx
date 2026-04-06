@@ -153,7 +153,16 @@ export default function Home() {
       )}
 
       <div className="bg-gradient-to-r from-teal-700 to-blue-600 text-white pt-10 pb-8 px-6 rounded-b-[2rem] shadow-lg max-w-2xl mx-auto relative">
-        <div className="absolute top-4 right-4 flex items-center gap-2">
+        <div className="absolute top-4 right-4 flex flex-wrap items-center justify-end gap-2 max-w-[70%]">
+          <Link href="/suggestion-paper?action=print" className="text-xs bg-white/20 px-3 py-1.5 rounded-lg font-bold hover:bg-white/30 transition border border-white/10 flex items-center gap-1.5">
+            🖨️ <span>{t('Print', 'Print')}</span>
+          </Link>
+          <Link href="/suggestion-paper?action=pdf" className="text-xs bg-white/20 px-3 py-1.5 rounded-lg font-bold hover:bg-white/30 transition border border-white/10 flex items-center gap-1.5">
+            ⬇️ <span>PDF</span>
+          </Link>
+          <Link href="/suggestion-paper" className="text-xs bg-white/20 px-3 py-1.5 rounded-lg font-bold hover:bg-white/30 transition border border-white/10 flex items-center gap-1.5">
+            📄 <span className="hidden sm:inline">{t('ฟอร์ม A5', 'A5 Form')}</span>
+          </Link>
           <Link href="/admin" className="text-xs bg-white/20 px-3 py-1.5 rounded-lg font-bold hover:bg-white/30 transition border border-white/10 flex items-center gap-1.5">
             📊 <span className="hidden sm:inline">Dashboard</span>
           </Link>
@@ -163,6 +172,28 @@ export default function Home() {
         <p className="text-sm opacity-90 leading-relaxed">
           {t('เปิดโอกาสให้พนักงานมีส่วนร่วมในการพลิกโฉม ปรับปรุงคุณภาพ ลดต้นทุน เพิ่มความปลอดภัย และพัฒนาประสิทธิภาพอย่างก้าวกระโดด', 'An opportunity for employees to engage in transformation, quality improvement, cost reduction, safety enhancement, and breakthrough efficiency development.')}
         </p>
+      </div>
+
+      <div className="max-w-2xl mx-auto mt-4 px-4">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+          <p className="text-sm font-semibold text-blue-900 mb-3">
+            {t('ต้องการพิมพ์ฟอร์มกระดาษ A5 หรือดาวน์โหลด PDF?', 'Need A5 print form or downloadable PDF?')}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Link
+              href="/suggestion-paper"
+              className="rounded-xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-blue-700 transition"
+            >
+              {t('เปิดฟอร์มกระดาษ A5', 'Open A5 Paper Form')}
+            </Link>
+            <Link
+              href="/suggestion-paper"
+              className="rounded-xl border border-blue-300 bg-white px-4 py-3 text-center text-sm font-bold text-blue-700 hover:bg-blue-100 transition"
+            >
+              {t('ไปหน้า Print / Download PDF', 'Go to Print / Download PDF')}
+            </Link>
+          </div>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto mt-4 px-4 space-y-4">
