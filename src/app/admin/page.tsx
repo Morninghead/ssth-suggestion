@@ -12,7 +12,6 @@ import {
   getAdminProfile,
   createAdminProfile,
   fetchAdminProfiles,
-  inviteAdminUser,
   updateAdminProfileStatus,
   isSupabaseConfigured,
   isPrimaryAdmin,
@@ -288,7 +287,24 @@ export default function AdminDashboard() {
 
     setIsInviting(true);
     try {
-      await inviteAdminUser(inviteEmail, inviteFullName);
+      const session = await supabase.auth.getSession();
+      if (!session.data.session?.access_token) {
+        throw new Error(t('ไม่พบเซสชัน กรุณาเข้าสู่ระบบใหม่', 'Session not found. Please log in again.'));
+      }
+
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session.access_token}`
+        },
+        body: JSON.stringify({ email: inviteEmail, fullName: inviteFullName })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to invite user');
+      }
 
       Swal.fire({
         icon: 'success',

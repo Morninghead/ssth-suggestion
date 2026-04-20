@@ -359,31 +359,3 @@ export async function signInWithGoogle() {
   }
 }
 
-export async function inviteAdminUser(email: string, fullName: string) {
-  const client = requireSupabase();
-  const { data, error } = await client.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName }
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  if (data?.user) {
-    // Upsert into admin_profiles to pre-approve them
-    const { error: profileError } = await client
-      .from('admin_profiles')
-      .upsert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: fullName,
-        status: 'approved',
-      });
-
-    if (profileError) {
-      console.warn('Failed to pre-approve profile:', profileError);
-    }
-  }
-
-  return data?.user;
-}
