@@ -504,7 +504,7 @@ export default function AdminDashboard() {
               placeholder={t('อีเมลผู้ดูแล', 'Email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500 outline-none"
               required
             />
             <input
@@ -512,7 +512,7 @@ export default function AdminDashboard() {
               placeholder={t('รหัสผ่าน', 'Password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white p-3 text-center text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500 outline-none"
               required
             />
             <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold p-3 rounded-xl transition shadow-lg shadow-teal-200">{t('เข้าสู่ระบบ', 'Login')}</button>
@@ -716,7 +716,7 @@ export default function AdminDashboard() {
                   rows={3}
                   value={updateFeedback}
                   onChange={e => setUpdateFeedback(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder={t('พิมพ์ข้อเสนอแนะ..', 'Type feedback..')}
                 ></textarea>
               </div>
@@ -727,7 +727,7 @@ export default function AdminDashboard() {
                   rows={3}
                   value={updateAfterDetail}
                   onChange={e => setUpdateAfterDetail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-3 text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-teal-500"
                   placeholder={t('ผลลัพธ์ที่ได้..', 'Result..')}
                 ></textarea>
               </div>
