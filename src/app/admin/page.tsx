@@ -788,7 +788,7 @@ export default function AdminDashboard() {
                   placeholder={t('อีเมล', 'Email')}
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
-                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-slate-400"
                   required
                 />
                 <input
@@ -796,7 +796,7 @@ export default function AdminDashboard() {
                   placeholder={t('ชื่อ - นามสกุล', 'Full Name')}
                   value={inviteFullName}
                   onChange={e => setInviteFullName(e.target.value)}
-                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-slate-400"
                   required
                 />
                 <button
