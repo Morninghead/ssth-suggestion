@@ -9,10 +9,10 @@ import type { User } from '@supabase/supabase-js';
 import {
   fetchTickets,
   getCurrentAdminUser,
-  getCurrentAuthSession,
   getAdminProfile,
   createAdminProfile,
   fetchAdminProfiles,
+  inviteAdminUser,
   updateAdminProfileStatus,
   isSupabaseConfigured,
   isPrimaryAdmin,
@@ -288,24 +288,7 @@ export default function AdminDashboard() {
 
     setIsInviting(true);
     try {
-      const session = await getCurrentAuthSession();
-      if (!session?.access_token) {
-        throw new Error(t('ไม่พบเซสชัน กรุณาเข้าสู่ระบบใหม่', 'Session not found. Please log in again.'));
-      }
-
-      const res = await fetch('/api/admin/invite', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ email: inviteEmail, fullName: inviteFullName })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to invite user');
-      }
+      await inviteAdminUser(inviteEmail, inviteFullName);
 
       Swal.fire({
         icon: 'success',
