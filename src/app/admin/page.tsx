@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js';
 import {
   fetchTickets,
   getCurrentAdminUser,
+  getCurrentAuthSession,
   getAdminProfile,
   createAdminProfile,
   fetchAdminProfiles,
@@ -132,6 +133,9 @@ export default function AdminDashboard() {
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [allProfiles, setAllProfiles] = useState<AdminProfile[]>([]);
   const [showAdminMgmt, setShowAdminMgmt] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFullName, setInviteFullName] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
 
   // Selection for edit
   const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
@@ -275,6 +279,53 @@ export default function AdminDashboard() {
       Swal.fire({ icon: 'error', title: 'Error', text: error instanceof Error ? error.message : 'Unknown error' });
     } finally {
       setRequestingAccess(false);
+    }
+  };
+
+  const handleInviteAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail || !inviteFullName) return;
+
+    setIsInviting(true);
+    try {
+      const session = await getCurrentAuthSession();
+      if (!session?.access_token) {
+        throw new Error(t('ไม่พบเซสชัน กรุณาเข้าสู่ระบบใหม่', 'Session not found. Please log in again.'));
+      }
+
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ email: inviteEmail, fullName: inviteFullName })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to invite user');
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: t('ส่งคำเชิญสำเร็จ', 'Invite Sent'),
+        text: t(`ระบบส่งลิงก์เชิญไปที่ ${inviteEmail} แล้ว`, `An invite link has been sent to ${inviteEmail}.`),
+      });
+
+      setInviteEmail('');
+      setInviteFullName('');
+      
+      const profiles = await fetchAdminProfiles();
+      setAllProfiles(profiles);
+    } catch (error: any) {
+      Swal.fire({
+        icon: 'error',
+        title: t('เกิดข้อผิดพลาด', 'Error Occurred'),
+        text: error.message
+      });
+    } finally {
+      setIsInviting(false);
     }
   };
 
@@ -746,6 +797,35 @@ export default function AdminDashboard() {
               <p className="text-sm text-slate-500">{t('ตรวจสอบและอนุมัติรายชื่อพนักงานที่ขอเข้าใช้งานระบบหลังบ้าน', 'Review and approve employees requesting admin access.')}</p>
             </div>
             
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <h3 className="text-sm font-bold text-teal-700 mb-3">{t('เชิญผู้ดูแลระบบใหม่', 'Invite New Admin')}</h3>
+              <form onSubmit={handleInviteAdmin} className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="email"
+                  placeholder={t('อีเมล', 'Email')}
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder={t('ชื่อ - นามสกุล', 'Full Name')}
+                  value={inviteFullName}
+                  onChange={e => setInviteFullName(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isInviting}
+                  className="bg-teal-600 text-white font-bold px-4 py-2.5 rounded-xl hover:bg-teal-700 transition disabled:bg-slate-300 whitespace-nowrap shadow-sm shadow-teal-200"
+                >
+                  {isInviting ? t('กำลังเชิญ...', 'Inviting...') : t('ส่งคำเชิญ', 'Send Invite')}
+                </button>
+              </form>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
